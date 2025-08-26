@@ -19,6 +19,7 @@ interface MinioServiceConfig {
   accessKey: string
   secretKey: string
   bucket?: string
+  region?: string
 }
 
 export interface MinioFileProviderOptions {
@@ -26,6 +27,7 @@ export interface MinioFileProviderOptions {
   accessKey: string
   secretKey: string
   bucket?: string
+  region?: string
 }
 
 const DEFAULT_BUCKET = 'medusa-media'
@@ -47,20 +49,22 @@ class MinioFileProviderService extends AbstractFileProviderService {
       endPoint: options.endPoint,
       accessKey: options.accessKey,
       secretKey: options.secretKey,
-      bucket: options.bucket
+      bucket: options.bucket,
+      region: options.region
     }
 
     // Use provided bucket or default
     this.bucket = this.config_.bucket || DEFAULT_BUCKET
     this.logger_.info(`MinIO service initialized with bucket: ${this.bucket}`)
 
-    // Initialize Minio client with hardcoded SSL settings
+    // Initialize Minio client configurado para S3
     this.client = new Client({
       endPoint: this.config_.endPoint,
       port: 443,
       useSSL: true,
       accessKey: this.config_.accessKey,
-      secretKey: this.config_.secretKey
+      secretKey: this.config_.secretKey,
+      region: this.config_.region || 'us-east-2' // Usar región configurada o default
     })
 
     // Initialize bucket and policy
@@ -163,7 +167,7 @@ class MinioFileProviderService extends AbstractFileProviderService {
       const fileKey = `${parsedFilename.name}-${ulid()}${parsedFilename.ext}`
       const content = Buffer.from(file.content, 'binary')
 
-      // Upload file with public-read access
+      // Upload file sin ACL - usar bucket policy para acceso público
       await this.client.putObject(
         this.bucket,
         fileKey,
@@ -172,12 +176,12 @@ class MinioFileProviderService extends AbstractFileProviderService {
         {
           'Content-Type': file.mimeType,
           'x-amz-meta-original-filename': file.filename,
-          'x-amz-acl': 'public-read'
+          // Removido 'x-amz-acl': 'public-read' para evitar error de ACL
         }
       )
 
-      // Generate URL using the endpoint and bucket
-      const url = `https://${this.config_.endPoint}/${this.bucket}/${fileKey}`
+      // Generate URL - formato S3 estándar
+      const url = `https://${this.bucket}.${this.config_.endPoint}/${fileKey}`
 
       this.logger_.info(`Successfully uploaded file ${fileKey} to MinIO bucket ${this.bucket}`)
 

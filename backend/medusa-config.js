@@ -16,10 +16,12 @@ import {
   STRIPE_API_KEY,
   STRIPE_WEBHOOK_SECRET,
   WORKER_MODE,
-  MINIO_ENDPOINT,
-  MINIO_ACCESS_KEY,
-  MINIO_SECRET_KEY,
-  MINIO_BUCKET,
+  S3_FILE_URL,
+  S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY,
+  S3_REGION,
+  S3_BUCKET,
+  S3_ENDPOINT,
   MEILISEARCH_HOST,
   MEILISEARCH_ADMIN_KEY
 } from 'lib/constants';
@@ -50,29 +52,25 @@ const medusaConfig = {
     disable: SHOULD_DISABLE_ADMIN,
   },
   modules: [
+    // S3 File storage module
     {
       key: Modules.FILE,
       resolve: '@medusajs/file',
       options: {
         providers: [
-          ...(MINIO_ENDPOINT && MINIO_ACCESS_KEY && MINIO_SECRET_KEY ? [{
-            resolve: './src/modules/minio-file',
-            id: 'minio',
+          // Usar módulo personalizado que no usa ACLs
+          {
+            resolve: "./src/modules/minio-file",
+            id: "s3-compatible",
             options: {
-              endPoint: MINIO_ENDPOINT,
-              accessKey: MINIO_ACCESS_KEY,
-              secretKey: MINIO_SECRET_KEY,
-              bucket: MINIO_BUCKET // Optional, default: medusa-media
-            }
-          }] : [{
-            resolve: '@medusajs/file-local',
-            id: 'local',
-            options: {
-              upload_dir: 'static',
-              backend_url: `${BACKEND_URL}/static`
-            }
-          }])
-        ]
+              endPoint: S3_ENDPOINT?.replace('https://', '') || 's3.us-east-2.amazonaws.com',
+              accessKey: S3_ACCESS_KEY_ID,
+              secretKey: S3_SECRET_ACCESS_KEY,
+              bucket: S3_BUCKET,
+              region: S3_REGION || 'us-east-2',
+            },
+          },
+        ],
       }
     },
     ...(REDIS_URL ? [{
