@@ -63,7 +63,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 // Endpoint para validar un código específico
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
-    const { code } = req.body;
+    const { code } = req.body as { code?: string };
     
     if (!code) {
       return res.status(400).json({
