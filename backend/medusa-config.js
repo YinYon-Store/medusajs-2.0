@@ -58,9 +58,9 @@ const medusaConfig = {
       resolve: '@medusajs/file',
       options: {
         providers: [
-          // Usar módulo personalizado que no usa ACLs
+          // AWS S3 file provider (compatible with S3 API)
           {
-            resolve: "./src/modules/minio-file",
+            resolve: "./src/modules/s3-file",
             id: "s3-compatible",
             options: {
               endPoint: S3_ENDPOINT?.replace('https://', '') || 's3.us-east-2.amazonaws.com',
@@ -98,7 +98,7 @@ const medusaConfig = {
             resolve: '@medusajs/notification-sendgrid',
             id: 'sendgrid',
             options: {
-              channels: ['email'],
+              channels: ['email', 'feed'],
               api_key: SENDGRID_API_KEY,
               from: SENDGRID_FROM_EMAIL,
             }
@@ -107,7 +107,7 @@ const medusaConfig = {
             resolve: './src/modules/email-notifications',
             id: 'resend',
             options: {
-              channels: ['email'],
+              channels: ['email', 'feed'],
               api_key: RESEND_API_KEY,
               from: RESEND_FROM_EMAIL,
             },

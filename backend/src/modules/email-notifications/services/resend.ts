@@ -52,6 +52,14 @@ export class ResendNotificationService extends AbstractNotificationProviderServi
       throw new MedusaError(MedusaError.Types.INVALID_DATA, `SMS notification not supported`)
     }
 
+    // Handle feed channel notifications (typically for in-app notifications)
+    if (notification.channel === 'feed') {
+      this.logger_.log(
+        `Feed notification "${notification.template}" processed successfully (no email sent)`
+      )
+      return {} // Return empty object for feed notifications
+    }
+
     // Generate the email content using the template
     let emailContent: ReactNode
 

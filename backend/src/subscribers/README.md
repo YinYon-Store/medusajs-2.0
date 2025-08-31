@@ -53,7 +53,6 @@ export default async function productCreateHandler({
 
   const product = await productModuleService.retrieve(productId)
 
-  console.log(`The product ${product.title} was created`)
 }
 
 export const config: SubscriberConfig = {
