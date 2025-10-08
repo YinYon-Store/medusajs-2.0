@@ -103,6 +103,24 @@ export const MEILISEARCH_HOST = process.env.MEILISEARCH_HOST;
 export const MEILISEARCH_ADMIN_KEY = process.env.MEILISEARCH_ADMIN_KEY;
 
 /**
+ * Cash on Delivery (COD) payment configuration
+ */
+export const COD_ENABLED = process.env.COD_ENABLED !== 'false'; // Enabled by default
+export const COD_DESCRIPTION = process.env.COD_DESCRIPTION || 'Pago contra entrega al recibir el producto';
+
+/**
+ * Wompi payment configuration
+ */
+export const WOMPI_ENABLED = process.env.WOMPI_ENABLED !== 'false'; // Enabled by default
+export const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
+export const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
+export const WOMPI_INTEGRITY_KEY = process.env.WOMPI_INTEGRITY_KEY;
+export const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
+export const WOMPI_EVENTS_SECRET = process.env.WOMPI_EVENTS_SECRET;
+export const WOMPI_ENVIRONMENT = process.env.WOMPI_ENVIRONMENT || 'sandbox';
+export const WOMPI_REDIRECT_URL = process.env.WOMPI_REDIRECT_URL;
+
+/**
  * Worker mode
  */
 export const WORKER_MODE =
