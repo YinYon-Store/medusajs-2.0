@@ -178,10 +178,10 @@ function buildPlugins() {
           products: {
             type: 'products',
             enabled: true,
-            fields: ['id', 'title', 'description', 'handle', 'variant_sku', 'thumbnail'],
+            fields: ['id', 'title', 'description', 'handle', 'thumbnail'],
             indexSettings: {
-              searchableAttributes: ['title', 'description', 'variant_sku'],
-              displayedAttributes: ['id', 'handle', 'title', 'description', 'variant_sku', 'thumbnail'],
+              searchableAttributes: ['title', 'description'],
+              displayedAttributes: ['id', 'handle', 'title', 'description', 'thumbnail'],
               filterableAttributes: ['id', 'handle'],
             },
             primaryKey: 'id',
