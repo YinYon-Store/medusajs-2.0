@@ -74,14 +74,9 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
     const receivedChecksum = signature.checksum.toUpperCase();
     const isValid = calculatedHash.toUpperCase() === receivedChecksum;
 
-    console.log(`🔐 Validación de firma Wompi:`);
-    console.log(`   - Hash calculado: ${calculatedHash.toUpperCase()}`);
-    console.log(`   - Hash recibido:  ${receivedChecksum}`);
-    console.log(`   - Válido: ${isValid ? '✅' : '❌'}`);
 
     return isValid;
   } catch (error) {
-    console.error("❌ Error validando evento Wompi:", error);
     return false;
   }
 }
@@ -105,17 +100,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(401).json({ error: "Evento no autenticado" });
     }
 
-    console.log("✅ Evento Wompi autenticado correctamente");
 
     // --- 3️⃣ Filtrar solo eventos relevantes ---
     if (event !== "transaction.updated") {
-      console.log(`ℹ️ Evento ignorado: ${event}`);
       return res.status(400).json({ message: "Evento ignorado" });
     }
 
     // --- 4️⃣ Validar estado de la transacción ---
     if (transaction.status !== "APPROVED") {
-      console.log(`ℹ️ Transacción ${transaction.id} con estado ${transaction.status}, no se captura.`);
       return res.status(400).json({ message: "Estado no aprobado" });
     }
 
@@ -150,13 +142,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     );
 
     if (!payment) {
-      console.log("ℹ️ No hay pagos autorizados para capturar.");
       return res.status(200).json({ message: "Sin pagos pendientes" });
     }
 
     await paymentModule.capturePayment({ payment_id: payment.id });
 
-    console.log(`✅ Pago capturado para transacción ${transaction.id}`);
 
     return res.status(200).json({
       status: "success",

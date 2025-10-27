@@ -158,6 +158,23 @@ function buildModules() {
     });
   }
 
+  // Fulfillment module with providers
+  modules.push({
+    key: Modules.FULFILLMENT,
+    resolve: '@medusajs/fulfillment',
+    options: {
+        providers: [
+          // default provider
+          {
+            resolve: './src/modules/providers/local-fulfillment',
+            id: 'local-fulfillment',
+            options: {
+            },
+          },
+        ],
+    },
+  });
+
   return modules;
 }
 

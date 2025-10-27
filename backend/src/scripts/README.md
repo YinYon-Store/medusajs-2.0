@@ -23,7 +23,6 @@ export default async function myScript ({
 
   const [, count] = await productModuleService.listAndCount()
 
-  console.log(`You have ${count} product(s)`)
 }
 ```
 

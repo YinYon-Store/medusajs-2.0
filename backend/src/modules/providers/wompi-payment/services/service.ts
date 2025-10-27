@@ -80,19 +80,6 @@ export class WompiPaymentProvider extends AbstractPaymentProvider {
       currency,
       integrityKey
     )
-    
-    console.log(
-      "initiatePayment data:",
-      {
-        publicKey: process.env.WOMPI_PUBLIC_KEY,
-        reference: reference,
-        cart_id: cartId,
-        amount_in_cents: (Number(amount)*100).toString(),
-        currency: currency,
-        signature: signature,
-        redirectUrl: process.env.WOMPI_REDIRECT_URL,
-      }
-    )
 
     return {
       data: {
