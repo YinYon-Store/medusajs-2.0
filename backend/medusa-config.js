@@ -57,6 +57,24 @@ function buildModules() {
     }
   });
 
+  // Promotion module (para descuentos automáticos y cupones)
+  modules.push({
+    key: Modules.PROMOTION,
+    resolve: "@medusajs/promotion",
+    options: {
+      // puedes dejar vacío o definir reglas avanzadas si usas workflows
+    }
+  });
+
+  // Pricing module (para cálculo de precios con promociones)
+  modules.push({
+    key: Modules.PRICING,
+    resolve: "@medusajs/pricing",
+    options: {
+      // deja vacío si usas la configuración por defecto
+    }
+  });
+
   // Redis modules (Event Bus and Workflow Engine)
   if (REDIS_URL) {
     modules.push({
@@ -81,7 +99,7 @@ function buildModules() {
   // Notification module
   const hasSendgrid = SENDGRID_API_KEY && SENDGRID_FROM_EMAIL;
   const hasResend = RESEND_API_KEY && RESEND_FROM_EMAIL;
-  
+
   if (hasSendgrid || hasResend) {
     const notificationProviders = [];
 
@@ -120,7 +138,7 @@ function buildModules() {
 
   // Payment module - COD and Wompi only
   const paymentProviders = [];
-  
+
   // Cash on Delivery provider
   if (COD_ENABLED) {
     paymentProviders.push({
@@ -163,15 +181,15 @@ function buildModules() {
     key: Modules.FULFILLMENT,
     resolve: '@medusajs/fulfillment',
     options: {
-        providers: [
-          // default provider
-          {
-            resolve: './src/modules/providers/local-fulfillment',
-            id: 'local-fulfillment',
-            options: {
-            },
+      providers: [
+        // default provider
+        {
+          resolve: './src/modules/providers/local-fulfillment',
+          id: 'local-fulfillment',
+          options: {
           },
-        ],
+        },
+      ],
     },
   });
 
