@@ -130,3 +130,12 @@ export const WORKER_MODE =
  * Disable Admin
  */
 export const SHOULD_DISABLE_ADMIN = process.env.MEDUSA_DISABLE_ADMIN === 'true'
+
+/**
+ * Bold payment configuration
+ */
+export const BOLD_ENABLED = process.env.BOLD_ENABLED !== 'false'; // Enabled by default
+export const BOLD_IDENTITY_KEY = process.env.BOLD_IDENTITY_KEY;
+export const BOLD_SECRET_KEY = process.env.BOLD_SECRET_KEY;
+export const BOLD_ENVIRONMENT = process.env.BOLD_ENVIRONMENT || 'sandbox';
+export const BOLD_REDIRECT_URL = process.env.BOLD_REDIRECT_URL;

@@ -27,7 +27,11 @@ import {
   WOMPI_ENABLED,
   WOMPI_PUBLIC_KEY,
   WOMPI_PRIVATE_KEY,
-  WOMPI_ENVIRONMENT
+  WOMPI_ENVIRONMENT,
+  BOLD_ENABLED,
+  BOLD_IDENTITY_KEY,
+  BOLD_SECRET_KEY,
+  BOLD_ENVIRONMENT
 } from 'lib/constants';
 
 loadEnv(process.env.NODE_ENV, process.cwd());
@@ -161,6 +165,20 @@ function buildModules() {
         publicKey: WOMPI_PUBLIC_KEY,
         privateKey: WOMPI_PRIVATE_KEY,
         environment: WOMPI_ENVIRONMENT
+      },
+    });
+  }
+
+  // Bold provider
+  if (BOLD_ENABLED) {
+    paymentProviders.push({
+      resolve: './src/modules/providers/bold-payment',
+      id: 'bold',
+      options: {
+        enabled: BOLD_ENABLED,
+        secretKey: BOLD_SECRET_KEY,
+        identityKey: BOLD_IDENTITY_KEY,
+        environment: BOLD_ENVIRONMENT
       },
     });
   }
