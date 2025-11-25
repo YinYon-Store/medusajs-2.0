@@ -111,11 +111,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(400).json({ message: "Estado no aprobado" });
     }
 
-    const cartId = transaction.reference;
+     // Extraer cart_id del reference
+    // El reference puede venir en formato: cart_id_timestamp para identificar intentos únicos
+    // O en formato antiguo: solo cart_id
+    const reference = transaction.reference;
+    const cartId = reference.includes('_') 
+      ? reference.split('_')[0] 
+      : reference;
+
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
     const paymentModule = scope.resolve(Modules.PAYMENT);
 
-    // --- 5️⃣ Buscar orden asociada al cart ---
+    // --- 5️⃣ Buscar orden asociada al cart usando el cart_id extraído ---
     const { data: orderCarts } = await query.graph({
       entity: "order_cart",
       fields: ["order_id"],

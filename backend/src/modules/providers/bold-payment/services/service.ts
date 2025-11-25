@@ -70,8 +70,10 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
         const amount = input.amount.toString()
         const currency = "COP"
 
-        // Usar cart_id como reference para Bold
-        const reference = cartId
+        // Usar cart_id + timestamp como reference único para identificar cada intento de transacción
+        // Formato: cart_id_timestamp para evitar conflictos con múltiples intentos
+        const timestamp = Date.now()
+        const reference = `${cartId}_${timestamp}`
 
         // Generar el hash usando la función JS externa
         const signature = await generateBoldHash(
