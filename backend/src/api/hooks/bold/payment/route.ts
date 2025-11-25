@@ -75,70 +75,40 @@ function validateBoldEvent(rawBody: string, signature: string): boolean {
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
-  // Responder inmediatamente con 200 (antes de 2 segundos)
-  // Esto confirma que el evento fue recibido correctamente
-  res.status(200).json({ status: "received" });
-
   try {
-    // Intentar obtener el raw body de diferentes formas
-    // En Medusa, el body puede venir parseado, así que intentamos obtenerlo del request original
-    let rawBody: string;
-    
-    // Intentar obtener rawBody del request original (si está disponible)
-    const originalReq = (req as any).raw || req;
-    if (originalReq.rawBody) {
-      rawBody = originalReq.rawBody.toString('utf-8');
-    } else if (typeof req.body === 'string') {
-      rawBody = req.body;
-    } else {
-      // Si no tenemos el raw body, reconstruirlo desde el objeto parseado
-      // Nota: Esto puede fallar si el formato JSON cambia (espacios, orden)
-      rawBody = JSON.stringify(req.body);
-    }
-    
-    const signature = req.headers['x-bold-signature'] as string;
-
-    // --- 1️⃣ Validar autenticidad del evento ---
-    const isValidEvent = validateBoldEvent(rawBody, signature);
-    if (!isValidEvent) {
-      console.error("🚨 Evento Bold no autenticado - posible ataque");
-      return; // Ya respondimos con 200, solo logueamos el error
-    }
-
     // Parsear el cuerpo
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const webhookData = body as BoldWebhookBody;
     const { type, data } = webhookData;
 
-    // --- 2️⃣ Validar estructura básica ---
+    // --- 1️⃣ Validar estructura básica del payload ---
     if (!data?.metadata?.reference || !data?.payment_id || !type) {
       console.error("❌ Payload inválido de Bold:", { 
         hasReference: !!data?.metadata?.reference,
         hasPaymentId: !!data?.payment_id,
         hasType: !!type
       });
-      return;
+      return res.status(400).json({ error: "Payload inválido" });
     }
 
-    // --- 3️⃣ Procesar según el tipo de evento ---
     const reference = data.metadata.reference;
     
     if (!reference) {
-      console.warn("⚠️ Webhook de Bold sin reference, ignorando");
-      return;
+      console.warn("⚠️ Webhook de Bold sin reference");
+      return res.status(400).json({ error: "Reference no proporcionado" });
     }
 
     // Extraer cart_id del reference
-    // El reference puede venir en formato: cart_id_timestamp para identificar intentos únicos
-    // O en formato antiguo: solo cart_id
-    var cartId = "cart_" + reference.split("_",)[1];
-    console.log("reference", reference);
-    console.log("cartId", cartId);
+    // El reference viene en formato: timestamp_XXXXXXXX (reemplazando "cart_" por timestamp + "_")
+    // Para reconstruir el cart_id: "cart_" + la parte después del primer "_"
+    const cartId = "cart_" + reference.split("_")[1];
+    console.log("📦 Bold Webhook - reference:", reference, "-> cartId:", cartId);
+
     const scope = req.scope;
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
     const paymentModule = scope.resolve(Modules.PAYMENT);
 
-    // Buscar orden asociada al cart usando el cart_id extraído
+    // --- 2️⃣ Validar que la orden del reference exista (ANTES de responder 200) ---
     const { data: orderCarts } = await query.graph({
       entity: "order_cart",
       fields: ["order_id"],
@@ -147,12 +117,33 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     if (!orderCarts?.length) {
       console.error(`❌ Orden no encontrada para cart_id: ${cartId} (reference recibido: ${reference})`);
-      return;
+      return res.status(400).json({ error: "Orden no encontrada para el reference proporcionado" });
     }
 
+    // --- ✅ Orden existe, responder 200 y continuar procesamiento ---
+    res.status(200).json({ status: "received" });
+
+    // --- 3️⃣ Validar autenticidad del evento (después de confirmar que la orden existe) ---
+    let rawBody: string;
+    const originalReq = (req as any).raw || req;
+    if (originalReq.rawBody) {
+      rawBody = originalReq.rawBody.toString('utf-8');
+    } else if (typeof req.body === 'string') {
+      rawBody = req.body;
+    } else {
+      rawBody = JSON.stringify(req.body);
+    }
+    
+    const signature = req.headers['x-bold-signature'] as string;
+    const isValidEvent = validateBoldEvent(rawBody, signature);
+    if (!isValidEvent) {
+      console.error("🚨 Evento Bold no autenticado - posible ataque");
+      return; // Ya respondimos con 200, solo logueamos el error
+    }
+
+    // --- 4️⃣ Buscar payment collection asociada ---
     const orderId = orderCarts[0].order_id;
 
-    // Buscar payment collection asociada
     const { data: collections } = await query.graph({
       entity: "order_payment_collection",
       fields: ["payment_collection_id"],
@@ -166,7 +157,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const paymentCollectionId = collections[0].payment_collection_id;
 
-    // --- 4️⃣ Manejar cada tipo de evento ---
+    // --- 5️⃣ Manejar cada tipo de evento ---
     switch (type) {
       case "SALE_APPROVED":
         // Venta aprobada - capturar el pago
@@ -249,7 +240,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
   } catch (err) {
     console.error("❌ Error procesando evento Bold:", err);
-    // Ya respondimos con 200, solo logueamos el error
+    // Si aún no hemos respondido, enviar error 500
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Error interno procesando el webhook" });
+    }
   }
 };
 
