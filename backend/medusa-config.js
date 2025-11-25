@@ -140,36 +140,36 @@ function buildModules() {
     });
   }
 
-  // Payment module - COD and Wompi only
+  // Payment module - Bold only
   const paymentProviders = [];
 
-  // Cash on Delivery provider
-  if (COD_ENABLED) {
-    paymentProviders.push({
-      resolve: './src/modules/providers/cod-payment',
-      id: 'contra_entrega',
-      options: {
-        enabled: COD_ENABLED,
-        description: COD_DESCRIPTION
-      },
-    });
-  }
+  // Cash on Delivery provider - DISABLED
+  // if (COD_ENABLED) {
+  //   paymentProviders.push({
+  //     resolve: './src/modules/providers/cod-payment',
+  //     id: 'contra_entrega',
+  //     options: {
+  //       enabled: COD_ENABLED,
+  //       description: COD_DESCRIPTION
+  //     },
+  //   });
+  // }
 
-  // Wompi provider
-  if (WOMPI_ENABLED) {
-    paymentProviders.push({
-      resolve: './src/modules/providers/wompi-payment',
-      id: 'wompi',
-      options: {
-        enabled: WOMPI_ENABLED,
-        publicKey: WOMPI_PUBLIC_KEY,
-        privateKey: WOMPI_PRIVATE_KEY,
-        environment: WOMPI_ENVIRONMENT
-      },
-    });
-  }
+  // Wompi provider - DISABLED
+  // if (WOMPI_ENABLED) {
+  //   paymentProviders.push({
+  //     resolve: './src/modules/providers/wompi-payment',
+  //     id: 'wompi',
+  //     options: {
+  //       enabled: WOMPI_ENABLED,
+  //       publicKey: WOMPI_PUBLIC_KEY,
+  //       privateKey: WOMPI_PRIVATE_KEY,
+  //       environment: WOMPI_ENVIRONMENT
+  //     },
+  //   });
+  // }
 
-  // Bold provider
+  // Bold provider - ENABLED
   if (BOLD_ENABLED) {
     paymentProviders.push({
       resolve: './src/modules/providers/bold-payment',
