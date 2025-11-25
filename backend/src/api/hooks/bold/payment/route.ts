@@ -131,10 +131,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     // Extraer cart_id del reference
     // El reference puede venir en formato: cart_id_timestamp para identificar intentos únicos
     // O en formato antiguo: solo cart_id
-    const cartId = reference.includes('_') 
-      ? reference.split('_')[0] 
-      : reference;
-
+    var cartId = "cart_" + reference.split("_",)[1];
+    console.log("reference", reference);
+    console.log("cartId", cartId);
     const scope = req.scope;
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
     const paymentModule = scope.resolve(Modules.PAYMENT);

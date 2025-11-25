@@ -73,7 +73,7 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
         // Usar cart_id + timestamp como reference único para identificar cada intento de transacción
         // Formato: cart_id_timestamp para evitar conflictos con múltiples intentos
         const timestamp = Date.now()
-        const reference = `${cartId}_${timestamp}`
+        const reference = cartId.replace("cart_", timestamp+'_')
 
         // Generar el hash usando la función JS externa
         const signature = await generateBoldHash(
@@ -96,6 +96,7 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
                 currency: currency,
                 signature: signature,
                 redirectUrl: process.env.BOLD_REDIRECT_URL,
+                cartId: cartId,
                 amount: amount,
             },
             id: reference,
