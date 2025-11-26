@@ -31,8 +31,25 @@ import {
   BOLD_ENABLED,
   BOLD_IDENTITY_KEY,
   BOLD_SECRET_KEY,
-  BOLD_ENVIRONMENT
+  BOLD_ENVIRONMENT,
+  ADDI_ENABLED,
+  ADDI_CLIENT_ID,
+  ADDI_CLIENT_SECRET,
+  ADDI_ALLY_SLUG,
+  ADDI_ENVIRONMENT,
+  ADDI_REDIRECT_URL,
+  ADDI_CALLBACK_URL,
+  ADDI_LOGO_URL,
+  ADDI_AUTH_URL,
+  ADDI_API_URL,
+  ADDI_CONFIG_URL,
+  ADDI_AUDIENCE,
+  PAYMENT_ENV,
+  IS_PAYMENT_PROD
 } from 'lib/constants';
+
+// Log payment environment on startup
+console.log(`💳 Payment Environment: ${PAYMENT_ENV} (${IS_PAYMENT_PROD ? 'PRODUCTION' : 'STAGING'})`);
 
 loadEnv(process.env.NODE_ENV, process.cwd());
 
@@ -179,6 +196,28 @@ function buildModules() {
         secretKey: BOLD_SECRET_KEY,
         identityKey: BOLD_IDENTITY_KEY,
         environment: BOLD_ENVIRONMENT
+      },
+    });
+  }
+
+  // ADDI provider (Buy Now Pay Later) - ENABLED
+  if (ADDI_ENABLED) {
+    paymentProviders.push({
+      resolve: './src/modules/providers/addi-payment',
+      id: 'addi',
+      options: {
+        enabled: ADDI_ENABLED,
+        clientId: ADDI_CLIENT_ID,
+        clientSecret: ADDI_CLIENT_SECRET,
+        allySlug: ADDI_ALLY_SLUG,
+        environment: ADDI_ENVIRONMENT,
+        redirectUrl: ADDI_REDIRECT_URL,
+        callbackUrl: ADDI_CALLBACK_URL,
+        logoUrl: ADDI_LOGO_URL,
+        authUrl: ADDI_AUTH_URL,
+        apiUrl: ADDI_API_URL,
+        configUrl: ADDI_CONFIG_URL,
+        audience: ADDI_AUDIENCE
       },
     });
   }

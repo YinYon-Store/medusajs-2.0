@@ -103,24 +103,6 @@ export const MEILISEARCH_HOST = process.env.MEILISEARCH_HOST;
 export const MEILISEARCH_ADMIN_KEY = process.env.MEILISEARCH_ADMIN_KEY;
 
 /**
- * Cash on Delivery (COD) payment configuration
- */
-export const COD_ENABLED = process.env.COD_ENABLED !== 'false'; // Enabled by default
-export const COD_DESCRIPTION = process.env.COD_DESCRIPTION || 'Pago contra entrega al recibir el producto';
-
-/**
- * Wompi payment configuration
- */
-export const WOMPI_ENABLED = process.env.WOMPI_ENABLED !== 'false'; // Enabled by default
-export const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
-export const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
-export const WOMPI_INTEGRITY_KEY = process.env.WOMPI_INTEGRITY_KEY;
-export const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
-export const WOMPI_EVENTS_SECRET = process.env.WOMPI_EVENTS_SECRET;
-export const WOMPI_ENVIRONMENT = process.env.WOMPI_ENVIRONMENT || 'sandbox';
-export const WOMPI_REDIRECT_URL = process.env.WOMPI_REDIRECT_URL;
-
-/**
  * Worker mode
  */
 export const WORKER_MODE =
@@ -131,11 +113,108 @@ export const WORKER_MODE =
  */
 export const SHOULD_DISABLE_ADMIN = process.env.MEDUSA_DISABLE_ADMIN === 'true'
 
+// ============================================================================
+// PAYMENT PROVIDERS CONFIGURATION
+// ============================================================================
+
+/**
+ * Global payment environment flag: "STAGING" or "PROD"
+ * This determines which set of credentials to use for all payment providers
+ */
+export const PAYMENT_ENV = (process.env.PAYMENT_ENV || 'STAGING').toUpperCase() as 'STAGING' | 'PROD';
+export const IS_PAYMENT_PROD = PAYMENT_ENV === 'PROD';
+
+/**
+ * Cash on Delivery (COD) payment configuration
+ * COD doesn't need environment-specific credentials
+ */
+export const COD_ENABLED = process.env.COD_ENABLED !== 'false'; // Enabled by default
+export const COD_DESCRIPTION = process.env.COD_DESCRIPTION || 'Pago contra entrega al recibir el producto';
+
+/**
+ * Wompi payment configuration
+ * Uses WOMPI_STAGING_* or WOMPI_PROD_* based on PAYMENT_ENV
+ */
+export const WOMPI_ENABLED = process.env.WOMPI_ENABLED !== 'false'; // Enabled by default
+
+// Staging credentials
+const WOMPI_STAGING_PUBLIC_KEY = process.env.WOMPI_STAGING_PUBLIC_KEY;
+const WOMPI_STAGING_PRIVATE_KEY = process.env.WOMPI_STAGING_PRIVATE_KEY;
+const WOMPI_STAGING_INTEGRITY_KEY = process.env.WOMPI_STAGING_INTEGRITY_KEY;
+const WOMPI_STAGING_EVENTS_SECRET = process.env.WOMPI_STAGING_EVENTS_SECRET;
+
+// Production credentials
+const WOMPI_PROD_PUBLIC_KEY = process.env.WOMPI_PROD_PUBLIC_KEY;
+const WOMPI_PROD_PRIVATE_KEY = process.env.WOMPI_PROD_PRIVATE_KEY;
+const WOMPI_PROD_INTEGRITY_KEY = process.env.WOMPI_PROD_INTEGRITY_KEY;
+const WOMPI_PROD_EVENTS_SECRET = process.env.WOMPI_PROD_EVENTS_SECRET;
+
+// Export based on PAYMENT_ENV
+export const WOMPI_PUBLIC_KEY = IS_PAYMENT_PROD ? WOMPI_PROD_PUBLIC_KEY : WOMPI_STAGING_PUBLIC_KEY;
+export const WOMPI_PRIVATE_KEY = IS_PAYMENT_PROD ? WOMPI_PROD_PRIVATE_KEY : WOMPI_STAGING_PRIVATE_KEY;
+export const WOMPI_INTEGRITY_KEY = IS_PAYMENT_PROD ? WOMPI_PROD_INTEGRITY_KEY : WOMPI_STAGING_INTEGRITY_KEY;
+export const WOMPI_EVENTS_SECRET = IS_PAYMENT_PROD ? WOMPI_PROD_EVENTS_SECRET : WOMPI_STAGING_EVENTS_SECRET;
+export const WOMPI_ENVIRONMENT = IS_PAYMENT_PROD ? 'prod' : 'sandbox';
+export const WOMPI_REDIRECT_URL = process.env.WOMPI_REDIRECT_URL;
+
 /**
  * Bold payment configuration
+ * Uses BOLD_STAGING_* or BOLD_PROD_* based on PAYMENT_ENV
  */
 export const BOLD_ENABLED = process.env.BOLD_ENABLED !== 'false'; // Enabled by default
-export const BOLD_IDENTITY_KEY = process.env.BOLD_IDENTITY_KEY;
-export const BOLD_SECRET_KEY = process.env.BOLD_SECRET_KEY;
-export const BOLD_ENVIRONMENT = process.env.BOLD_ENVIRONMENT || 'sandbox';
+
+// Staging credentials
+const BOLD_STAGING_IDENTITY_KEY = process.env.BOLD_STAGING_IDENTITY_KEY;
+const BOLD_STAGING_SECRET_KEY = process.env.BOLD_STAGING_SECRET_KEY;
+
+// Production credentials
+const BOLD_PROD_IDENTITY_KEY = process.env.BOLD_PROD_IDENTITY_KEY;
+const BOLD_PROD_SECRET_KEY = process.env.BOLD_PROD_SECRET_KEY;
+
+// Export based on PAYMENT_ENV
+export const BOLD_IDENTITY_KEY = IS_PAYMENT_PROD ? BOLD_PROD_IDENTITY_KEY : BOLD_STAGING_IDENTITY_KEY;
+export const BOLD_SECRET_KEY = IS_PAYMENT_PROD ? BOLD_PROD_SECRET_KEY : BOLD_STAGING_SECRET_KEY;
+export const BOLD_ENVIRONMENT = IS_PAYMENT_PROD ? 'prod' : 'sandbox';
 export const BOLD_REDIRECT_URL = process.env.BOLD_REDIRECT_URL;
+
+/**
+ * ADDI payment configuration (Buy Now Pay Later)
+ * Uses ADDI_STAGING_* or ADDI_PROD_* based on PAYMENT_ENV
+ */
+export const ADDI_ENABLED = process.env.ADDI_ENABLED === 'true'; // Disabled by default
+
+// Staging credentials and URLs
+const ADDI_STAGING_CLIENT_ID = process.env.ADDI_STAGING_CLIENT_ID;
+const ADDI_STAGING_CLIENT_SECRET = process.env.ADDI_STAGING_CLIENT_SECRET;
+const ADDI_STAGING_ALLY_SLUG = process.env.ADDI_STAGING_ALLY_SLUG || 'inversionesauracolombia-ecommerce';
+const ADDI_STAGING_AUTH_URL = process.env.ADDI_STAGING_AUTH_URL || 'https://auth.addi-staging.com/oauth/token';
+const ADDI_STAGING_API_URL = process.env.ADDI_STAGING_API_URL || 'https://api.addi-staging.com';
+const ADDI_STAGING_CONFIG_URL = process.env.ADDI_STAGING_CONFIG_URL || 'https://channels-public-api.addi.com';
+const ADDI_STAGING_AUDIENCE = process.env.ADDI_STAGING_AUDIENCE || 'https://api.staging.addi.com';
+
+// Production credentials and URLs
+const ADDI_PROD_CLIENT_ID = process.env.ADDI_PROD_CLIENT_ID;
+const ADDI_PROD_CLIENT_SECRET = process.env.ADDI_PROD_CLIENT_SECRET;
+const ADDI_PROD_ALLY_SLUG = process.env.ADDI_PROD_ALLY_SLUG || 'inversionesauracolombia-ecommerce';
+const ADDI_PROD_AUTH_URL = process.env.ADDI_PROD_AUTH_URL || 'https://auth.addi.com/oauth/token';
+const ADDI_PROD_API_URL = process.env.ADDI_PROD_API_URL || 'https://api.addi.com';
+const ADDI_PROD_CONFIG_URL = process.env.ADDI_PROD_CONFIG_URL || 'https://channels-public-api.addi.com';
+const ADDI_PROD_AUDIENCE = process.env.ADDI_PROD_AUDIENCE || 'https://api.addi.com';
+
+// Export based on PAYMENT_ENV
+export const ADDI_CLIENT_ID = IS_PAYMENT_PROD ? ADDI_PROD_CLIENT_ID : ADDI_STAGING_CLIENT_ID;
+export const ADDI_CLIENT_SECRET = IS_PAYMENT_PROD ? ADDI_PROD_CLIENT_SECRET : ADDI_STAGING_CLIENT_SECRET;
+export const ADDI_ALLY_SLUG = IS_PAYMENT_PROD ? ADDI_PROD_ALLY_SLUG : ADDI_STAGING_ALLY_SLUG;
+export const ADDI_AUTH_URL = IS_PAYMENT_PROD ? ADDI_PROD_AUTH_URL : ADDI_STAGING_AUTH_URL;
+export const ADDI_API_URL = IS_PAYMENT_PROD ? ADDI_PROD_API_URL : ADDI_STAGING_API_URL;
+export const ADDI_CONFIG_URL = IS_PAYMENT_PROD ? ADDI_PROD_CONFIG_URL : ADDI_STAGING_CONFIG_URL;
+export const ADDI_AUDIENCE = IS_PAYMENT_PROD ? ADDI_PROD_AUDIENCE : ADDI_STAGING_AUDIENCE;
+export const ADDI_ENVIRONMENT = IS_PAYMENT_PROD ? 'production' : 'staging';
+export const ADDI_REDIRECT_URL = process.env.ADDI_REDIRECT_URL;
+export const ADDI_CALLBACK_URL = process.env.ADDI_CALLBACK_URL;
+export const ADDI_LOGO_URL = process.env.ADDI_LOGO_URL;
+
+/**
+ * Publishable API Key for internal store API calls
+ */
+export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;
