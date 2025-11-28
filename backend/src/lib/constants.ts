@@ -215,6 +215,14 @@ export const ADDI_CALLBACK_URL = process.env.ADDI_CALLBACK_URL;
 export const ADDI_LOGO_URL = process.env.ADDI_LOGO_URL;
 
 /**
+ * ADDI Callback Authentication Credentials
+ * These are used to validate incoming webhook calls from ADDI
+ * ADDI sends these credentials via HTTP Basic Auth
+ */
+export const ADDI_CALLBACK_USERNAME = process.env.ADDI_CALLBACK_USERNAME || 'addi_callback';
+export const ADDI_CALLBACK_PASSWORD = process.env.ADDI_CALLBACK_PASSWORD;
+
+/**
  * Publishable API Key for internal store API calls
  */
 export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;

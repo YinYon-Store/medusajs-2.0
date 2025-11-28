@@ -1,5 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { BOLD_SECRET_KEY } from "../../../../lib/constants";
 const { validateBoldWebhookSignature } = require("../../../../modules/providers/bold-payment/utils/bold-hash.js");
 
 // Tipos para el webhook de Bold
@@ -54,7 +55,7 @@ interface BoldWebhookBody {
  */
 function validateBoldEvent(rawBody: string, signature: string): boolean {
   try {
-    const secretKey = process.env.BOLD_SECRET_KEY;
+    const secretKey = BOLD_SECRET_KEY;
     
     if (!secretKey) {
       console.error("❌ BOLD_SECRET_KEY no configurado");

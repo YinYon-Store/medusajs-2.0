@@ -29,6 +29,7 @@ import {
   PaymentActions,
   PaymentSessionStatus,
 } from "@medusajs/framework/utils"
+import { WOMPI_INTEGRITY_KEY, WOMPI_PUBLIC_KEY, WOMPI_REDIRECT_URL, WOMPI_ENVIRONMENT, WOMPI_PRIVATE_KEY } from "../../../../lib/constants"
 const { generateWompiHash } = require("../utils/wompi-hash.js")
 
 
@@ -66,7 +67,7 @@ export class WompiPaymentProvider extends AbstractPaymentProvider {
       throw new Error("Cart ID no encontrado en el contexto del pago")
     }
 
-    const integrityKey = process.env.WOMPI_INTEGRITY_KEY || process.env.WOMPI_INTEGRITY_SECRET
+    const integrityKey = WOMPI_INTEGRITY_KEY
     const amount = input.amount.toString()
     const currency = "COP"
 
@@ -83,12 +84,12 @@ export class WompiPaymentProvider extends AbstractPaymentProvider {
 
     return {
       data: {
-        publicKey: process.env.WOMPI_PUBLIC_KEY,
+        publicKey: WOMPI_PUBLIC_KEY,
         reference: reference,
         amount_in_cents: (Number(amount)*100).toString(),
         currency: currency,
         signature: signature,
-        redirectUrl: process.env.WOMPI_REDIRECT_URL,
+        redirectUrl: WOMPI_REDIRECT_URL,
       },
       id: reference,
       status: PaymentSessionStatus.PENDING
@@ -107,14 +108,14 @@ export class WompiPaymentProvider extends AbstractPaymentProvider {
       }
 
       // Hacer llamada a la API de Wompi para verificar el estado
-      const wompiApiUrl = process.env.WOMPI_ENVIRONMENT === 'prod' 
+      const wompiApiUrl = WOMPI_ENVIRONMENT === 'prod' 
         ? 'https://production.wompi.co/v1'
         : 'https://sandbox.wompi.co/v1'
       
       const response = await fetch(`${wompiApiUrl}/transactions/${transactionId}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
+          'Authorization': `Bearer ${WOMPI_PRIVATE_KEY}`,
           'Content-Type': 'application/json'
         }
       })

@@ -29,6 +29,7 @@ import {
     PaymentActions,
     PaymentSessionStatus,
 } from "@medusajs/framework/utils"
+import { BOLD_SECRET_KEY, BOLD_IDENTITY_KEY, BOLD_REDIRECT_URL, BOLD_ENVIRONMENT } from "../../../../lib/constants"
 const { generateBoldHash } = require("../utils/bold-hash.js")
 
 
@@ -66,7 +67,7 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
             throw new Error("Cart ID no encontrado en el contexto del pago")
         }
 
-        const secretKey = process.env.BOLD_SECRET_KEY
+        const secretKey = BOLD_SECRET_KEY
         const amount = input.amount.toString()
         const currency = "COP"
 
@@ -90,12 +91,12 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
 
         return {
             data: {
-                publicKey: process.env.BOLD_PUBLIC_KEY,
+                publicKey: BOLD_IDENTITY_KEY, // Bold usa IDENTITY_KEY como publicKey
                 reference: reference,
                 amount_in_cents: (Number(amount) * 100).toString(),
                 currency: currency,
                 signature: signature,
-                redirectUrl: process.env.BOLD_REDIRECT_URL,
+                redirectUrl: BOLD_REDIRECT_URL,
                 cartId: cartId,
                 amount: amount,
             },
@@ -116,15 +117,14 @@ export class BoldPaymentProvider extends AbstractPaymentProvider {
             }
 
             // Hacer llamada a la API de Bold para verificar el estado
-            // Asumimos URLs similares a Wompi
-            const boldApiUrl = process.env.BOLD_ENVIRONMENT === 'prod'
+            const boldApiUrl = BOLD_ENVIRONMENT === 'prod'
                 ? 'https://production.bold.co/v1'
                 : 'https://sandbox.bold.co/v1'
 
             const response = await fetch(`${boldApiUrl}/transactions/${transactionId}`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${process.env.BOLD_PRIVATE_KEY}`,
+                    'Authorization': `Bearer ${BOLD_SECRET_KEY}`, // Bold usa SECRET_KEY para autenticación
                     'Content-Type': 'application/json'
                 }
             })

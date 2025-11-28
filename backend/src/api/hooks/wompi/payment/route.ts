@@ -1,5 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { WOMPI_EVENTS_SECRET } from "../../../../lib/constants";
 const { generateWompiEventHash } = require("../../../../modules/providers/wompi-payment/utils/wompi-hash.js");
 
 // Tipos para el webhook de Wompi
@@ -38,10 +39,10 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
   try {
     const { data, signature, timestamp } = eventData;
     
-    // Obtener el secreto de eventos desde variables de entorno
-    const eventSecret = process.env.WOMPI_EVENT_SECRET;
+    // Obtener el secreto de eventos desde constantes (respeta PAYMENT_ENV)
+    const eventSecret = WOMPI_EVENTS_SECRET;
     if (!eventSecret) {
-      console.error("❌ WOMPI_EVENT_SECRET no configurado");
+      console.error("❌ WOMPI_EVENTS_SECRET no configurado");
       return false;
     }
 
