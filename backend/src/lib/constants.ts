@@ -226,3 +226,10 @@ export const ADDI_CALLBACK_PASSWORD = process.env.ADDI_CALLBACK_PASSWORD;
  * Publishable API Key for internal store API calls
  */
 export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;
+
+/**
+ * WhatsApp Configuration
+ */
+export const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+export const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+export const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
