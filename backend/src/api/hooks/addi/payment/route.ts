@@ -1,6 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { ADDI_CALLBACK_USERNAME, ADDI_CALLBACK_PASSWORD } from "../../../../lib/constants";
+import { notifyPaymentCaptured } from "../../../../lib/notification-service";
 
 // Tipos para el webhook de ADDI
 interface AddiWebhookBody {
@@ -163,6 +164,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
         const paymentCollectionId = collections[0].payment_collection_id;
 
+        // Get order for notifications
+        let order;
+        try {
+            order = await orderModule.retrieveOrder(orderId, {
+                relations: ["shipping_address"]
+            });
+        } catch (error) {
+            console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
+        }
+
         // --- 7️⃣ Procesar según el status ---
         switch (webhookData.status) {
             case "APPROVED":
@@ -204,6 +215,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                 } catch (error) {
                     console.error(`❌ ADDI Webhook - Error capturando pago:`, error);
                 }
+
+                // Send notification
+                if (order) {
+                    try {
+                        const amount = parseFloat(webhookData.approvedAmount) || 0;
+                        const reference = webhookData.applicationId;
+                        const time = new Date(parseInt(webhookData.statusTimestamp) * 1000).toISOString();
+                        await notifyPaymentCaptured(order, "APPROVED", amount, reference, 'addi', time);
+                    } catch (error) {
+                        console.error(`❌ Error sending payment notification:`, error);
+                    }
+                }
                 break;
 
             case "REJECTED":
@@ -225,6 +248,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                     console.log(`   Mensaje: ${getStatusMessage(webhookData.status)}`);
                 } catch (error) {
                     console.error(`❌ ADDI Webhook - Error actualizando metadata de orden:`, error);
+                }
+
+                // Send notification
+                if (order) {
+                    try {
+                        const amount = parseFloat(webhookData.approvedAmount) || 0;
+                        const reference = webhookData.applicationId;
+                        const time = new Date(parseInt(webhookData.statusTimestamp) * 1000).toISOString();
+                        await notifyPaymentCaptured(order, webhookData.status, amount, reference, 'addi', time);
+                    } catch (error) {
+                        console.error(`❌ Error sending payment notification:`, error);
+                    }
                 }
                 break;
 

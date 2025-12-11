@@ -1,6 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { BOLD_SECRET_KEY } from "../../../../lib/constants";
+import { notifyPaymentCaptured } from "../../../../lib/notification-service";
 const { validateBoldWebhookSignature } = require("../../../../modules/providers/bold-payment/utils/bold-hash.js");
 
 // Tipos para el webhook de Bold
@@ -108,6 +109,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const scope = req.scope;
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
     const paymentModule = scope.resolve(Modules.PAYMENT);
+    const orderModule = scope.resolve(Modules.ORDER);
 
     // --- 2️⃣ Validar que la orden del reference exista (ANTES de responder 200) ---
     const { data: orderCarts } = await query.graph({
@@ -158,6 +160,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const paymentCollectionId = collections[0].payment_collection_id;
 
+    // Get order for notifications
+    let order;
+    try {
+      order = await orderModule.retrieveOrder(orderId, {
+        relations: ["shipping_address"]
+      });
+    } catch (error) {
+      console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
+    }
+
     // --- 5️⃣ Manejar cada tipo de evento ---
     switch (type) {
       case "SALE_APPROVED":
@@ -181,6 +193,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         } catch (error) {
           console.error(`❌ Error capturando pago de Bold (payment_id: ${data.payment_id}):`, error);
         }
+
+        // Send notification
+        if (order) {
+          try {
+            const amount = data.amount?.total || 0;
+            const reference = data.metadata?.reference || data.payment_id;
+            const time = data.created_at || new Date(webhookData.time * 1000).toISOString();
+            await notifyPaymentCaptured(order, type, amount, reference, 'bold', time);
+          } catch (error) {
+            console.error(`❌ Error sending payment notification:`, error);
+          }
+        }
         break;
 
       case "SALE_REJECTED":
@@ -203,6 +227,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           }
         } catch (error) {
           console.error(`❌ Error cancelando pago de Bold (payment_id: ${data.payment_id}):`, error);
+        }
+
+        // Send notification
+        if (order) {
+          try {
+            const amount = data.amount?.total || 0;
+            const reference = data.metadata?.reference || data.payment_id;
+            const time = data.created_at || new Date(webhookData.time * 1000).toISOString();
+            await notifyPaymentCaptured(order, type, amount, reference, 'bold', time);
+          } catch (error) {
+            console.error(`❌ Error sending payment notification:`, error);
+          }
         }
         break;
 

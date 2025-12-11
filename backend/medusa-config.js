@@ -45,13 +45,51 @@ import {
   ADDI_CONFIG_URL,
   ADDI_AUDIENCE,
   PAYMENT_ENV,
-  IS_PAYMENT_PROD
+  IS_PAYMENT_PROD,
+  NOTIFICATION_SERVICE_URL,
+  NOTIFICATION_API_KEY
 } from 'lib/constants';
 
 // Log payment environment on startup
 console.log(`💳 Payment Environment: ${PAYMENT_ENV} (${IS_PAYMENT_PROD ? 'PRODUCTION' : 'STAGING'})`);
 
 loadEnv(process.env.NODE_ENV, process.cwd());
+
+// Check notification service health on startup
+(async () => {
+  const notificationServiceUrl = NOTIFICATION_SERVICE_URL;
+  const healthUrl = `${notificationServiceUrl}/health`;
+  
+  try {
+    const response = await fetch(healthUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'ok' && data.service === 'notification-service') {
+        console.log(`✅ Notification Service: Connected (${notificationServiceUrl})`);
+      } else {
+        console.log(`⚠️  Notification Service: Invalid response from ${notificationServiceUrl}`);
+      }
+    } else {
+      console.log(`⚠️  Notification Service: Health check failed (HTTP ${response.status}) - ${notificationServiceUrl}`);
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log(`⚠️  Notification Service: Connection timeout - ${notificationServiceUrl}`);
+    } else {
+      console.log(`⚠️  Notification Service: Not available - ${notificationServiceUrl}`);
+    }
+    if (NOTIFICATION_API_KEY) {
+      console.log(`   Notifications will be skipped until service is available.`);
+    }
+  }
+})();
 
 // Helper function to build modules array
 function buildModules() {
@@ -161,16 +199,16 @@ function buildModules() {
   const paymentProviders = [];
 
   // Cash on Delivery provider - DISABLED
-  // if (COD_ENABLED) {
-  //   paymentProviders.push({
-  //     resolve: './src/modules/providers/cod-payment',
-  //     id: 'contra_entrega',
-  //     options: {
-  //       enabled: COD_ENABLED,
-  //       description: COD_DESCRIPTION
-  //     },
-  //   });
-  // }
+  if (COD_ENABLED) {
+    paymentProviders.push({
+      resolve: './src/modules/providers/cod-payment',
+      id: 'contra_entrega',
+      options: {
+        enabled: COD_ENABLED,
+        description: COD_DESCRIPTION
+      },
+    });
+  }
 
   // Wompi provider - DISABLED
   // if (WOMPI_ENABLED) {
@@ -291,7 +329,7 @@ const medusaConfig = {
     databaseUrl: DATABASE_URL,
     databaseLogging: false,
     redisUrl: REDIS_URL,
-    workerMode: WORKER_MODE,
+    workerMode: "shared",
     http: {
       adminCors: ADMIN_CORS,
       authCors: AUTH_CORS,

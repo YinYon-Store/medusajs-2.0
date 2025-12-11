@@ -1,5 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
+import { notifyOrderShipped } from "../../../../../lib/notification-service"
 
 export async function POST(
   req: MedusaRequest,
@@ -7,7 +8,7 @@ export async function POST(
 ): Promise<void> {
   try {
     const { order_id } = req.params
-    const { carrier_name, tracking_number } = req.body as { carrier_name: string, tracking_number: string }
+    const { carrier_name, tracking_number, tracking_url } = req.body as { carrier_name: string, tracking_number: string, tracking_url?: string }
 
     if (!order_id) {
       res.status(400).json({ error: "Order ID is required" })
@@ -50,6 +51,15 @@ export async function POST(
       }
     }])
 
+    // Send WhatsApp notification
+    try {
+      // Generate tracking URL if not provided (optional, can be empty string)
+      const trackingUrl = tracking_url || ''
+      await notifyOrderShipped(order, carrier_name, tracking_number, trackingUrl)
+    } catch (error) {
+      console.error('Error sending WhatsApp shipping notification:', error)
+      // Don't fail the request if notification fails
+    }
     
     // Return success response
     res.status(200).json({

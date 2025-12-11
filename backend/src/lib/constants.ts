@@ -233,3 +233,10 @@ export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;
 export const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 export const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 export const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+/**
+ * Notification Service Configuration
+ */
+export const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8080';
+export const NOTIFICATION_API_KEY = process.env.NOTIFICATION_API_KEY;
+export const NOTIFICATION_DRY_RUN = process.env.NOTIFICATION_DRY_RUN === 'true' || process.env.NODE_ENV === 'development';
