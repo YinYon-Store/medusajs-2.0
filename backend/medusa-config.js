@@ -55,8 +55,11 @@ console.log(`💳 Payment Environment: ${PAYMENT_ENV} (${IS_PAYMENT_PROD ? 'PROD
 
 loadEnv(process.env.NODE_ENV, process.cwd());
 
-// Check notification service health on startup
-(async () => {
+/**
+ * Check notification service health on startup
+ * This function can be called or commented out as needed
+ */
+async function checkNotificationServiceHealth() {
   const notificationServiceUrl = NOTIFICATION_SERVICE_URL;
   const healthUrl = `${notificationServiceUrl}/health`;
   
@@ -89,7 +92,10 @@ loadEnv(process.env.NODE_ENV, process.cwd());
       console.log(`   Notifications will be skipped until service is available.`);
     }
   }
-})();
+}
+
+// Uncomment the line below to enable notification service health check on startup
+// checkNotificationServiceHealth();
 
 // Helper function to build modules array
 function buildModules() {
@@ -329,7 +335,7 @@ const medusaConfig = {
     databaseUrl: DATABASE_URL,
     databaseLogging: false,
     redisUrl: REDIS_URL,
-    workerMode: "shared",
+    workerMode: process.env.MEDUSA_WORKER_MODE,
     http: {
       adminCors: ADMIN_CORS,
       authCors: AUTH_CORS,

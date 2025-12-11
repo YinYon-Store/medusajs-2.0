@@ -239,4 +239,4 @@ export const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
  */
 export const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8080';
 export const NOTIFICATION_API_KEY = process.env.NOTIFICATION_API_KEY;
-export const NOTIFICATION_DRY_RUN = process.env.NOTIFICATION_DRY_RUN === 'true' || process.env.NODE_ENV === 'development';
+export const NOTIFICATION_DRY_RUN = process.env.NOTIFICATION_DRY_RUN === 'true';

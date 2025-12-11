@@ -30,8 +30,36 @@ const LocalFulfillmentWidget = ({ data: order }: any) => {
   const [isSaving, setIsSaving] = useState(false)
   const [isNotifying, setIsNotifying] = useState(false)
 
+  // Estado de notificación desde metadata
+  const [notificationStatus, setNotificationStatus] = useState<string | null>(
+    order?.metadata?.whatsapp_notification_status ?? null
+  )
+  const [notificationSentAt, setNotificationSentAt] = useState<string | null>(
+    order?.metadata?.whatsapp_notification_sent_at ?? null
+  )
+
   // Verificar si falta tracking number
   const isTrackingMissing = !tracking || tracking.trim() === ""
+
+  // Verificar si la notificación ya fue enviada exitosamente
+  const isNotificationSent = notificationStatus === 'notificacion exitosa'
+
+  // Formatear fecha de notificación
+  const formatNotificationDate = (dateString: string | null): string => {
+    if (!dateString) return ''
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleString('es-CO', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateString
+    }
+  }
 
   // Función para mostrar notificaciones
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -211,6 +239,11 @@ const LocalFulfillmentWidget = ({ data: order }: any) => {
       }
 
       const result = await notifyRes.json()
+      
+      // Actualizar estado de notificación con la respuesta
+      setNotificationStatus(result.notification_status || null)
+      setNotificationSentAt(new Date().toISOString())
+      
       showToast('success', 'Notificación de envío enviada correctamente')
     } catch (err) {
       showToast('error', 'No se pudo enviar la notificación de envío')
@@ -242,6 +275,18 @@ const LocalFulfillmentWidget = ({ data: order }: any) => {
         <div className="mb-4 p-3 bg-ui-bg-warning-subtle border border-ui-border-warning rounded-lg">
           <p className="text-sm text-ui-fg-warning">
             ⚠️ Esta orden debe estar en versión 3 o superior para editar los datos de envío
+          </p>
+        </div>
+      )}
+
+      {/* Alerta de notificación ya enviada */}
+      {isNotificationSent && notificationSentAt && (
+        <div className="mb-4 p-3 bg-ui-bg-success-subtle border border-ui-border-success rounded-lg">
+          <p className="text-sm text-ui-fg-success font-medium">
+            ✓ Notificación de WhatsApp ya fue enviada
+          </p>
+          <p className="text-xs text-ui-fg-subtle mt-1">
+            Fecha de envío: {formatNotificationDate(notificationSentAt)}
           </p>
         </div>
       )}
@@ -308,11 +353,15 @@ const LocalFulfillmentWidget = ({ data: order }: any) => {
       {carrier && tracking && (
         <div className="mt-4 flex justify-end">
           <button 
-            className="px-4 py-2 bg-white text-black text-bold rounded-md border border-gray-300 text-sm hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-4 py-2 text-bold rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+              isNotificationSent 
+                ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100' 
+                : 'bg-white text-black border-gray-300 hover:bg-gray-300'
+            }`}
             onClick={handleNotifyShipping}
             disabled={isNotifying || isSaving}
           >
-            {isNotifying ? "Enviando..." : "Notificar a WhatsApp"}
+            {isNotifying ? "Enviando..." : isNotificationSent ? "Reenviar notificación a WhatsApp" : "Notificar a WhatsApp"}
           </button>
         </div>
       )}

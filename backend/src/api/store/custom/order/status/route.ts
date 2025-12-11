@@ -3,16 +3,7 @@ import { Modules, ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
 export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void> {
     try {
-        const { display_id, email } = req.query;
-
-        // Validate required parameters
-        if (!display_id || !email) {
-            res.status(400).json({
-                error: "Se requieren los parámetros 'display_id' y 'email'",
-                message: "Por favor proporciona el número de orden (display_id) y el email del usuario"
-            });
-            return;
-        }
+        const { order_id, display_id, email } = req.query;
 
         // Resolve required modules
         const orderModuleService = req.scope.resolve(Modules.ORDER);
@@ -21,43 +12,86 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
         const fulfillmentModule = req.scope.resolve(Modules.FULFILLMENT);
         const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
 
-        // Find customer by email
-        const customers = await customerModuleService.listCustomers({ email: email as string });
-        if (!customers || customers.length === 0) {
-            res.status(404).json({
-                error: "Cliente no encontrado",
-                message: "No se encontró un cliente con ese email"
-            });
-            return;
+        let order;
+        let finalOrder;
+
+        // Search method 1: Direct order_id search
+        if (order_id) {
+            try {
+                finalOrder = await orderModuleService.retrieveOrder(
+                    order_id as string,
+                    { relations: ["shipping_address", "billing_address", "items", "transactions", "summary"] }
+                );
+
+                if (!finalOrder) {
+                    res.status(404).json({
+                        error: "Orden no encontrada",
+                        message: "No se encontró una orden con ese ID"
+                    });
+                    return;
+                }
+
+                // Get basic order info for fulfillment query
+                order = {
+                    id: finalOrder.id,
+                    version: finalOrder.version
+                };
+            } catch (error) {
+                res.status(404).json({
+                    error: "Orden no encontrada",
+                    message: "No se encontró una orden con ese ID"
+                });
+                return;
+            }
         }
+        // Search method 2: display_id and email search
+        else if (display_id && email) {
+            // Find customer by email
+            const customers = await customerModuleService.listCustomers({ email: email as string });
+            if (!customers || customers.length === 0) {
+                res.status(404).json({
+                    error: "Cliente no encontrado",
+                    message: "No se encontró un cliente con ese email"
+                });
+                return;
+            }
 
-        const customer = customers[0];
+            const customer = customers[0];
 
-        // Find order by display_id
-        const orders = await orderModuleService.listOrders(
-            { customer_id: customer.id },
-            { relations: ["shipping_address", "billing_address"] }
-        );
+            // Find order by display_id
+            const orders = await orderModuleService.listOrders(
+                { customer_id: customer.id },
+                { relations: ["shipping_address", "billing_address"] }
+            );
 
-        const order = orders.find(order => order.display_id === Number(display_id));
-        if (!order) {
-            res.status(404).json({
-                error: "Orden no encontrada",
-                message: "No se encontró una orden con ese número"
-            });
-            return;
+            order = orders.find(order => order.display_id === Number(display_id));
+            if (!order) {
+                res.status(404).json({
+                    error: "Orden no encontrada",
+                    message: "No se encontró una orden con ese número"
+                });
+                return;
+            }
+
+            // Retrieve full order details
+            finalOrder = await orderModuleService.retrieveOrder(
+                order.id,
+                { relations: ["shipping_address", "billing_address", "items", "transactions", "summary"] }
+            );
+
+            if (!finalOrder) {
+                res.status(404).json({
+                    error: "Orden no encontrada",
+                    message: "No se encontró una orden con ese número"
+                });
+                return;
+            }
         }
-
-        // Retrieve full order details
-        const finalOrder = await orderModuleService.retrieveOrder(
-            order.id,
-            { relations: ["shipping_address", "billing_address", "items", "transactions", "summary"] }
-        );
-
-        if (!finalOrder) {
-            res.status(404).json({
-                error: "Orden no encontrada",
-                message: "No se encontró una orden con ese número"
+        // Invalid parameters
+        else {
+            res.status(400).json({
+                error: "Parámetros inválidos",
+                message: "Debes proporcionar 'order_id' o bien 'display_id' y 'email'"
             });
             return;
         }
@@ -67,7 +101,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
         const { data: collections } = await query.graph({
             entity: "order_payment_collection",
             fields: ["payment_collection_id"],
-            filters: { order_id: order.id },
+            filters: { order_id: finalOrder.id },
         });
 
         if (collections && collections.length > 0) {
@@ -169,11 +203,11 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
 
         // Get fulfillment data (only for version >= 2)
         let filteredFulfillment = null;
-        if (order.version >= 2) {
+        if (finalOrder.version >= 2) {
             const { data: fulfillments } = await query.graph({
                 entity: "order_fulfillment",
                 fields: ["fulfillment_id"],
-                filters: { order_id: order.id },
+                filters: { order_id: finalOrder.id },
             });
 
             if (fulfillments && fulfillments.length > 0) {

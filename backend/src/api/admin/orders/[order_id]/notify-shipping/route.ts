@@ -2,6 +2,49 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { notifyOrderShipped } from "../../../../../lib/notification-service"
 
+/**
+ * Build tracking URL based on courier name
+ * Uses environment variables for each courier's tracking URL template
+ * - COORDINADORA and MANUAL: concatenate tracking number to the URL
+ * - SERVIENTREGA and INTERRAPIDISIMO: use only the URL from env (no tracking number concatenation)
+ */
+function buildTrackingUrl(courierName: string, trackingNumber: string): string {
+  const normalizedCourier = courierName.toUpperCase()
+  
+  let trackingUrlTemplate = ''
+  
+  switch (normalizedCourier) {
+    case 'COORDINADORA':
+      trackingUrlTemplate = process.env.TRACKING_URL_COORDINADORA
+      break
+    case 'INTERRAPIDISIMO':
+      trackingUrlTemplate = process.env.TRACKING_URL_INTERRAPIDISIMO
+      break
+    case 'SERVIENTREGA':
+      trackingUrlTemplate = process.env.TRACKING_URL_SERVIENTREGA
+      break
+    case 'MANUAL':
+      trackingUrlTemplate = process.env.TRACKING_URL_MANUAL || ''
+      break
+    default:
+      trackingUrlTemplate = ''
+  }
+  
+  if (!trackingUrlTemplate) {
+    return ''
+  }
+  
+  // For COORDINADORA and MANUAL: concatenate tracking number to the URL
+  if (normalizedCourier === 'COORDINADORA' || normalizedCourier === 'MANUAL') {
+    // Remove trailing slash if present, then concatenate tracking number
+    const baseUrl = trackingUrlTemplate.replace(/\/$/, '')
+    return `${baseUrl}${trackingNumber}`
+  }
+  
+  // For SERVIENTREGA and INTERRAPIDISIMO: return only the URL from env
+  return trackingUrlTemplate
+}
+
 export async function POST(
   req: MedusaRequest,
   res: MedusaResponse
@@ -33,40 +76,50 @@ export async function POST(
       return
     }
 
-    // Generate notification message
-    const message = generateNotificationMessage({
-      display_id: order.display_id,
-      shipping_address: order.shipping_address,
-      carrier_name,
-      tracking_number
-    })
+    // Build tracking URL based on courier name
+    const trackingUrl = tracking_url || buildTrackingUrl(carrier_name, tracking_number)
 
-    // Update order metadata with the notification message
+    // Send WhatsApp notification and capture response
+    let notificationStatus = 'notificacion erronea'
+    try {
+      const notificationResponse = await notifyOrderShipped(order, carrier_name, tracking_number, trackingUrl)
+      
+      // Check if response is 200 (success)
+      if (notificationResponse && notificationResponse.status === 200) {
+        notificationStatus = 'notificacion exitosa'
+        console.log('✅ Notification sent successfully')
+      } else if (notificationResponse) {
+        // Response exists but status is not 200
+        console.error(`❌ Notification service returned status ${notificationResponse.status}`)
+        notificationStatus = 'notificacion erronea'
+      } else {
+        // Response is null (no phone, no API key, network error, etc.)
+        console.warn('⚠️ Notification service returned null - check logs for reason (missing phone, API key, or network error)')
+        notificationStatus = 'notificacion erronea'
+      }
+    } catch (error) {
+      console.error('❌ Error sending WhatsApp shipping notification:', error)
+      notificationStatus = 'notificacion erronea'
+    }
+
+    // Update order metadata with notification status and tracking URL
     await orderModuleService.updateOrders([{
       id: order_id,
       metadata: {
         ...(order.metadata || {}),
-        whatsapp_notification_message: message,
-        whatsapp_notification_sent_at: new Date().toISOString()
+        whatsapp_notification_status: notificationStatus,
+        whatsapp_notification_sent_at: new Date().toISOString(),
+        tracking_url: trackingUrl
       }
     }])
-
-    // Send WhatsApp notification
-    try {
-      // Generate tracking URL if not provided (optional, can be empty string)
-      const trackingUrl = tracking_url || ''
-      await notifyOrderShipped(order, carrier_name, tracking_number, trackingUrl)
-    } catch (error) {
-      console.error('Error sending WhatsApp shipping notification:', error)
-      // Don't fail the request if notification fails
-    }
     
     // Return success response
     res.status(200).json({
       success: true,
-      message: message,
+      notification_status: notificationStatus,
       order_id: order_id,
-      display_id: order.display_id
+      display_id: order.display_id,
+      tracking_url: trackingUrl
     })
 
   } catch (error) {
@@ -76,68 +129,4 @@ export async function POST(
       message: error instanceof Error ? error.message : "Unknown error"
     })
   }
-}
-
-// Generate notification message with data masking
-function generateNotificationMessage({
-  display_id,
-  shipping_address,
-  carrier_name,
-  tracking_number
-}: {
-  display_id: number
-  shipping_address: any
-  carrier_name: string
-  tracking_number: string
-}): string {
-  // Get template from environment variables based on carrier type
-  const template = carrier_name === "MANUAL" 
-    ? process.env.WHATSAPP_TEMPLATE_MANUAL
-    : process.env.WHATSAPP_TEMPLATE_CARRIER
-
-  if (!template) {
-    throw new Error("WhatsApp template not configured in environment variables")
-  }
-
-  // Mask sensitive data with random percentage between 40-60% visible
-  const maskData = (data: string | null | undefined): string => {
-    if (!data) return "***"
-    if (data.length <= 2) return "*".repeat(data.length)
-    
-    // Calculate random percentage between 60-80%
-    const randomPercentage = 0.6 + Math.random() * 0.2 
-    const visibleChars = Math.max(1, Math.floor(data.length * randomPercentage))
-    
-    // Select random positions to display
-    const positions = Array.from({ length: data.length }, (_, i) => i)
-    const visiblePositions = positions
-      .sort(() => Math.random() - 0.5) // Shuffle randomly
-      .slice(0, visibleChars) // Take only needed chars
-      .sort((a, b) => a - b) // Sort to maintain structure
-    
-    let result = ""
-    for (let i = 0; i < data.length; i++) {
-      result += visiblePositions.includes(i) ? data[i] : "*"
-    }
-    
-    return result
-  }
-
-  // Mask sensitive customer data for security
-  const maskedData = {
-    first_name: maskData(shipping_address?.first_name),
-    last_name: maskData(shipping_address?.last_name),
-    address_1: maskData(shipping_address?.address_1)
-  }
-
-  // Replace placeholders in template
-  let message = template
-    .replace(/{display_id}/g, display_id.toString())
-    .replace(/{carrier_name}/g, carrier_name)
-    .replace(/{tracking_number}/g, tracking_number)
-    .replace(/{shipping_address\.first_name}/g, maskedData.first_name)
-    .replace(/{shipping_address\.first_lastname}/g, maskedData.last_name)
-    .replace(/{shipping_address\.address_1}/g, maskedData.address_1)
-
-  return message
 }

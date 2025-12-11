@@ -45,29 +45,55 @@ function getCustomerName(order: any): string {
 }
 
 /**
+ * Create a mock response object for dry run mode
+ */
+function createMockResponse(status: number): Response {
+  return {
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    ok: status >= 200 && status < 300,
+    headers: new Headers(),
+    redirected: false,
+    type: 'default',
+    url: '',
+    clone: function() { return this },
+    body: null,
+    bodyUsed: false,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    blob: async () => new Blob(),
+    formData: async () => new FormData(),
+    json: async () => ({}),
+    text: async () => '',
+  } as Response
+}
+
+/**
  * Call notification service endpoint
+ * Returns the response object to check status
  */
 async function callNotificationService(
   endpoint: string,
   payload: any
-): Promise<void> {
-  // Log the notification payload
+): Promise<Response | null> {
+  // Log the notification payload - ALWAYS log first
   console.log('\n📤 ===== NOTIFICATION SERVICE REQUEST =====')
   console.log(`📍 Endpoint: ${NOTIFICATION_SERVICE_URL}${endpoint}`)
   console.log(`📋 Method: POST`)
+  console.log(`🔑 API Key configured: ${NOTIFICATION_API_KEY ? 'YES' : 'NO'}`)
+  console.log(`🧪 Dry Run Mode: ${NOTIFICATION_DRY_RUN ? 'YES' : 'NO'}`)
   console.log(`📦 Payload:`)
   console.log(JSON.stringify(payload, null, 2))
   console.log('==========================================\n')
 
-  // In dry run mode, don't actually call the service
+  // In dry run mode, don't actually call the service but return a mock success response
   if (NOTIFICATION_DRY_RUN) {
     console.log('🧪 DRY RUN MODE: Notification logged but NOT sent to service')
-    return
+    return createMockResponse(200)
   }
 
   if (!NOTIFICATION_API_KEY) {
     console.warn('⚠️ NOTIFICATION_API_KEY not configured, skipping notification')
-    return
+    return null
   }
 
   try {
@@ -86,13 +112,17 @@ async function callNotificationService(
         `❌ Notification service error (${response.status}):`,
         errorText
       )
-      throw new Error(`Notification service returned ${response.status}: ${errorText}`)
+      // Return the response even if not ok, so caller can check status
+      return response
     }
 
     console.log(`✅ Notification sent successfully to ${endpoint}`)
+    console.log('response', response)
+    return response
   } catch (error) {
     console.error(`❌ Error calling notification service ${endpoint}:`, error)
-    // Don't throw - we don't want notification failures to break the main flow
+    // Return null on network errors
+    return null
   }
 }
 
@@ -166,21 +196,32 @@ export async function notifyPaymentCaptured(
 
 /**
  * Send order shipped notification
+ * Returns the response to check status (200 = success, otherwise error)
  */
 export async function notifyOrderShipped(
   order: any,
   courierName: string,
   trackingNumber: string,
   trackingUrl?: string
-): Promise<void> {
+): Promise<Response | null> {
+  console.log('\n🚀 ===== notifyOrderShipped CALLED =====')
+  console.log(`Order ID: ${order?.id}`)
+  console.log(`Order Display ID: ${order?.display_id}`)
+  console.log(`Courier: ${courierName}`)
+  console.log(`Tracking Number: ${trackingNumber}`)
+  console.log(`Tracking URL: ${trackingUrl || 'N/A'}`)
+  
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
+  console.log(`Customer Phone: ${customerPhone || 'NOT FOUND'}`)
   
   if (!customerPhone) {
     console.warn('⚠️ No customer phone found, skipping order shipped notification')
-    return
+    console.log('==========================================\n')
+    return null
   }
 
-  await callNotificationService('/events/order-shipped', {
+  console.log('📞 Calling notification service...')
+  const result = await callNotificationService('/events/order-shipped', {
     order_id: order.id,
     tenant_id: 'aura_perfumeria',
     customer_phone: customerPhone,
@@ -188,5 +229,10 @@ export async function notifyOrderShipped(
     tracking_number: trackingNumber,
     tracking_url: trackingUrl || '',
   })
+  
+  console.log(`📥 Notification service result: ${result ? `Response status ${result.status}` : 'null'}`)
+  console.log('==========================================\n')
+  
+  return result
 }
 
