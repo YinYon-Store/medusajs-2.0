@@ -2,10 +2,10 @@ import { Modules, ContainerRegistrationKeys } from '@medusajs/framework/utils'
 import { IOrderModuleService, IPaymentModuleService } from '@medusajs/framework/types'
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/framework'
 import { getPaymentResult, clearPaymentResult } from '../lib/payment-buffer-service'
-import { notifyPaymentCaptured } from '../lib/notification-service'
+import { notifyPaymentCaptured, notifyOrderCreated } from '../lib/notification-service'
 
 // Log that subscriber is registered
-console.log('📋 Order created payment buffer subscriber registered - listening for event: order.created')
+console.log('📋 Order created payment buffer subscriber registered - listening for events: order.placed, order.created, order.completed')
 
 /**
  * Subscriber que se ejecuta cuando se crea una orden
@@ -46,6 +46,16 @@ export default async function orderCreatedPaymentBufferHandler({
     }
     
     console.log('✅ Order retrieved successfully - Display ID:', order.display_id)
+    
+    // Enviar notificación WhatsApp de orden creada (siempre se envía)
+    try {
+      console.log('📱 Sending WhatsApp notification for order created:', order.id)
+      await notifyOrderCreated(order)
+      console.log('✅ WhatsApp notification sent successfully for order created')
+    } catch (error) {
+      console.error('❌ Error sending WhatsApp order created notification:', error)
+      // No fallar si solo falla la notificación
+    }
     
     // Buscar cart_id asociado a la orden
     let cartId: string | null = null
@@ -117,16 +127,36 @@ export default async function orderCreatedPaymentBufferHandler({
     
     // Capturar el pago
     try {
+      console.log(`🔍 Retrieving payment collection: ${paymentCollectionId}`)
       const paymentCollection = await paymentModule.retrievePaymentCollection(
         paymentCollectionId,
         { relations: ["payments"] }
       )
       
+      console.log(`📦 Payment collection retrieved:`, {
+        id: paymentCollection.id,
+        status: paymentCollection.status,
+        payments_count: paymentCollection.payments?.length || 0,
+        payments: paymentCollection.payments?.map((p: any) => ({
+          id: p.id,
+          status: p.status,
+          captured_at: p.captured_at,
+          amount: p.amount,
+        })) || []
+      })
+      
       const payment = paymentCollection.payments?.find(
-        (p: any) => p.status === "authorized" || !p.captured_at
+        (p: any) => (p as any).status === "authorized" || !p.captured_at
       )
       
       if (payment) {
+        const paymentAny = payment as any
+        console.log(`✅ Payment found to capture:`, {
+          id: paymentAny.id,
+          status: paymentAny.status,
+          amount: paymentAny.amount,
+          captured_at: paymentAny.captured_at,
+        })
         await paymentModule.capturePayment({ payment_id: payment.id })
         console.log(`✅ Pago capturado exitosamente desde buffer para orden ${orderId}`)
         console.log(`   Provider: ${paymentResult.provider}`)
@@ -200,7 +230,13 @@ export default async function orderCreatedPaymentBufferHandler({
         await clearPaymentResult(cartId)
         console.log(`✅ Buffer limpiado para cart: ${cartId}`)
       } else {
-        console.log(`ℹ️ No hay pagos pendientes para capturar en orden ${orderId}`)
+        console.log(`⚠️ No hay pagos pendientes para capturar en orden ${orderId}`)
+        console.log(`   Payment collection status: ${paymentCollection.status}`)
+        console.log(`   Available payments:`, paymentCollection.payments?.map((p: any) => ({
+          id: p.id,
+          status: p.status,
+          captured_at: p.captured_at,
+        })) || [])
         // Limpiar buffer aunque no haya pagos pendientes
         await clearPaymentResult(cartId)
       }
@@ -218,6 +254,6 @@ export default async function orderCreatedPaymentBufferHandler({
 }
 
 export const config: SubscriberConfig = {
-  event: ['order.created']
+  event: ['order.placed', 'order.created', 'order.completed']
 }
 
