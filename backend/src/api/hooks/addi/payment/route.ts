@@ -1,7 +1,8 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
-import { ADDI_CALLBACK_USERNAME, ADDI_CALLBACK_PASSWORD } from "../../../../lib/constants";
+import { ADDI_CALLBACK_USERNAME, ADDI_CALLBACK_PASSWORD, ADDI_TESTING_LOCAL } from "../../../../lib/constants";
 import { notifyPaymentCaptured } from "../../../../lib/notification-service";
+import { savePaymentResult, savePaymentError } from "../../../../lib/payment-buffer-service";
 
 // Tipos para el webhook de ADDI
 interface AddiWebhookBody {
@@ -18,8 +19,21 @@ interface AddiWebhookBody {
  * ADDI envía las credenciales en el header Authorization como Basic base64(username:password)
  */
 function validateBasicAuth(authHeader: string | undefined): boolean {
-    // Verificar que las credenciales estén configuradas
-    if (!ADDI_CALLBACK_PASSWORD) {
+    // Si ADDI_TESTING_LOCAL está activado, bypass la autenticación
+    if (ADDI_TESTING_LOCAL) {
+        console.warn("⚠️  ADDI_TESTING_LOCAL=true: Autenticación deshabilitada para pruebas locales");
+        return true;
+    }
+
+    // En modo desarrollo, permitir credenciales de prueba si no están configuradas
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const testUsername = 'addi_callback';
+    const testPassword = 'test_password';
+    
+    // Si no hay password configurado y estamos en desarrollo, usar credenciales de prueba
+    const effectivePassword = ADDI_CALLBACK_PASSWORD || (isDevelopment ? testPassword : null);
+    
+    if (!effectivePassword) {
         console.error("❌ ADDI Webhook - ADDI_CALLBACK_PASSWORD no configurado");
         return false;
     }
@@ -40,10 +54,18 @@ function validateBasicAuth(authHeader: string | undefined): boolean {
         const credentials = Buffer.from(base64Credentials, "base64").toString("utf-8");
         const [username, password] = credentials.split(":");
 
-        const isValid = username === ADDI_CALLBACK_USERNAME && password === ADDI_CALLBACK_PASSWORD;
+        // Validar contra credenciales configuradas o de prueba (solo en desarrollo)
+        const isValid = username === ADDI_CALLBACK_USERNAME && 
+                       password === effectivePassword;
         
         if (!isValid) {
             console.error("❌ ADDI Webhook - Credenciales inválidas");
+            if (isDevelopment) {
+                console.warn(`⚠️  En desarrollo, puedes usar: ${testUsername}:${testPassword}`);
+                console.warn(`⚠️  O configurar ADDI_TESTING_LOCAL=true para deshabilitar autenticación`);
+            }
+        } else if (isDevelopment && password === testPassword) {
+            console.warn("⚠️  MODO PRUEBA: Usando credenciales de prueba (solo en desarrollo)");
         }
 
         return isValid;
@@ -132,15 +154,61 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             filters: { cart_id: cartId },
         });
 
+        // --- 5️⃣ Si NO existe orden, guardar en buffer o metadata según el estado ---
         if (!orderCarts?.length) {
-            console.error(`❌ ADDI Webhook - Orden no encontrada para cart_id: ${cartId}`);
-            return res.status(400).json({ error: `Orden no encontrada para el carrito: ${cartId}` });
+            console.log(`📦 ADDI Webhook - Orden no encontrada para cart_id: ${cartId}, guardando en buffer/metadata`);
+            
+            // Manejar estado PENDING con error 402 (ADDI requiere esto)
+            if (webhookData.status === "PENDING") {
+                console.log(`⏳ ADDI Webhook - Estado PENDING, retornando 402`);
+                return res.status(402).json({
+                    ...webhookData,
+                    message: "Pago pendiente de validación"
+                });
+            }
+            
+            if (webhookData.status === "APPROVED") {
+                // Guardar resultado exitoso en buffer
+                await savePaymentResult(cartId, {
+                    status: "approved",
+                    transaction_id: webhookData.applicationId,
+                    provider: "addi",
+                    amount: parseFloat(webhookData.approvedAmount) || 0,
+                    currency: webhookData.currency,
+                    metadata: {
+                        applicationId: webhookData.applicationId,
+                        statusTimestamp: webhookData.statusTimestamp,
+                    },
+                });
+                console.log(`✅ ADDI Webhook - Resultado guardado en buffer para cart: ${cartId}`);
+                return res.status(200).json({
+                    ...webhookData,
+                    message: "Payment result saved, waiting for order creation"
+                });
+            } else {
+                // Guardar error en metadata del carrito para estados rechazados
+                await savePaymentError(
+                    cartId,
+                    {
+                        status: webhookData.status.toLowerCase(),
+                        provider: "addi",
+                        message: getStatusMessage(webhookData.status),
+                        transaction_id: webhookData.applicationId,
+                    },
+                    cartModule
+                );
+                console.log(`⚠️ ADDI Webhook - Error guardado en metadata del carrito: ${cartId}`);
+                return res.status(200).json({
+                    ...webhookData,
+                    message: "Payment error saved to cart"
+                });
+            }
         }
 
         const orderId = orderCarts[0].order_id;
         console.log(`✅ ADDI Webhook - Orden encontrada: ${orderId}`);
 
-        // --- 5️⃣ Manejar estado PENDING con error 402 ---
+        // --- 6️⃣ Manejar estado PENDING con error 402 (solo si existe orden) ---
         if (webhookData.status === "PENDING") {
             console.log(`⏳ ADDI Webhook - Estado PENDING, retornando 402`);
             return res.status(402).json({
@@ -149,7 +217,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             });
         }
 
-        // --- 6️⃣ Buscar payment collection asociada ---
+        // --- 7️⃣ Buscar payment collection asociada ---
         const { data: collections } = await query.graph({
             entity: "order_payment_collection",
             fields: ["payment_collection_id"],
@@ -174,7 +242,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
         }
 
-        // --- 7️⃣ Procesar según el status ---
+        // --- 8️⃣ Procesar según el status ---
         switch (webhookData.status) {
             case "APPROVED":
                 // Capturar el pago

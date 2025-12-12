@@ -2,6 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { BOLD_SECRET_KEY } from "../../../../lib/constants";
 import { notifyPaymentCaptured } from "../../../../lib/notification-service";
+import { savePaymentResult, savePaymentError } from "../../../../lib/payment-buffer-service";
 const { validateBoldWebhookSignature } = require("../../../../modules/providers/bold-payment/utils/bold-hash.js");
 
 // Tipos para el webhook de Bold
@@ -110,23 +111,66 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
     const paymentModule = scope.resolve(Modules.PAYMENT);
     const orderModule = scope.resolve(Modules.ORDER);
+    const cartModule = scope.resolve(Modules.CART);
 
-    // --- 2️⃣ Validar que la orden del reference exista (ANTES de responder 200) ---
+    // --- 2️⃣ Buscar orden asociada al cart_id ---
     const { data: orderCarts } = await query.graph({
       entity: "order_cart",
       fields: ["order_id"],
       filters: { cart_id: cartId },
     });
 
+    // --- 3️⃣ Si NO existe orden, guardar en buffer o metadata según el tipo de evento ---
     if (!orderCarts?.length) {
-      console.error(`❌ Orden no encontrada para cart_id: ${cartId} (reference recibido: ${reference})`);
-      return res.status(400).json({ error: "Orden no encontrada para el reference proporcionado" });
+      console.log(`📦 Bold Webhook - Orden no encontrada para cart_id: ${cartId}, guardando en buffer/metadata`);
+      
+      if (type === "SALE_APPROVED") {
+        // Guardar resultado exitoso en buffer
+        await savePaymentResult(cartId, {
+          status: "approved",
+          transaction_id: data.payment_id,
+          provider: "bold",
+          amount: data.amount?.total || 0,
+          currency: data.amount?.currency || "COP",
+          metadata: {
+            reference: reference,
+            bold_code: data.bold_code,
+            payer_email: data.payer_email,
+            payment_method: data.payment_method,
+            card: data.card,
+          },
+        });
+        console.log(`✅ Bold Webhook - Resultado guardado en buffer para cart: ${cartId}`);
+        return res.status(200).json({ 
+          status: "received",
+          message: "Payment result saved, waiting for order creation",
+          cart_id: cartId 
+        });
+      } else {
+        // Guardar error en metadata del carrito para eventos rechazados
+        await savePaymentError(
+          cartId,
+          {
+            status: type.toLowerCase(),
+            provider: "bold",
+            message: `Pago ${type} en Bold`,
+            transaction_id: data.payment_id,
+          },
+          cartModule
+        );
+        console.log(`⚠️ Bold Webhook - Error guardado en metadata del carrito: ${cartId}`);
+        return res.status(200).json({ 
+          status: "received",
+          message: "Payment error saved to cart",
+          cart_id: cartId 
+        });
+      }
     }
 
     // --- ✅ Orden existe, responder 200 y continuar procesamiento ---
     res.status(200).json({ status: "received" });
 
-    // --- 3️⃣ Validar autenticidad del evento (después de confirmar que la orden existe) ---
+    // --- 4️⃣ Validar autenticidad del evento (después de confirmar que la orden existe) ---
     let rawBody: string;
     const originalReq = (req as any).raw || req;
     if (originalReq.rawBody) {
@@ -144,7 +188,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       return; // Ya respondimos con 200, solo logueamos el error
     }
 
-    // --- 4️⃣ Buscar payment collection asociada ---
+    // --- 5️⃣ Buscar payment collection asociada ---
     const orderId = orderCarts[0].order_id;
 
     const { data: collections } = await query.graph({
@@ -170,7 +214,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
     }
 
-    // --- 5️⃣ Manejar cada tipo de evento ---
+    // --- 6️⃣ Manejar cada tipo de evento ---
     switch (type) {
       case "SALE_APPROVED":
         // Venta aprobada - capturar el pago

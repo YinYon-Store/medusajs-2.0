@@ -25,9 +25,9 @@
   "dependencies": {
     "@medusajs/admin-sdk": "2.8.8",
     "@medusajs/cli": "2.8.8",
+    "@medusajs/dashboard": "2.8.8",
     "@medusajs/framework": "2.8.8",
     "@medusajs/medusa": "2.8.8",
-    "@medusajs/dashboard": "2.8.8",
     "@medusajs/notification-sendgrid": "2.8.8",
     "@medusajs/payment-stripe": "2.8.8",
     "@medusajs/workflow-engine-redis": "2.8.8",
@@ -37,10 +37,12 @@
     "@mikro-orm/postgresql": "6.4.3",
     "@react-email/components": "^0.0.26",
     "@rokmohar/medusa-plugin-meilisearch": "1.2.3",
+    "@types/redis": "^4.0.11",
     "awilix": "^8.0.1",
     "medusajs-launch-utils": "^0.0.17",
     "minio": "^8.0.3",
     "pg": "^8.13.1",
+    "redis": "^5.10.0",
     "resend": "4.0.1",
     "ulid": "^2.3.0"
   },

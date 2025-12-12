@@ -223,6 +223,12 @@ export const ADDI_CALLBACK_USERNAME = process.env.ADDI_CALLBACK_USERNAME || 'add
 export const ADDI_CALLBACK_PASSWORD = process.env.ADDI_CALLBACK_PASSWORD;
 
 /**
+ * ADDI Testing Flag
+ * When set to 'true', disables authentication for local testing
+ */
+export const ADDI_TESTING_LOCAL = process.env.ADDI_TESTING_LOCAL === 'true';
+
+/**
  * Publishable API Key for internal store API calls
  */
 export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;

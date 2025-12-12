@@ -157,7 +157,7 @@ export async function notifyPaymentCaptured(
   status: string,
   amount: number,
   reference: string,
-  provider: 'bold' | 'addi',
+  provider: 'bold' | 'addi' | 'wompi',
   time?: string
 ): Promise<void> {
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
