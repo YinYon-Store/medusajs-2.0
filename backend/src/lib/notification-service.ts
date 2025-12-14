@@ -157,7 +157,7 @@ export async function notifyPaymentCaptured(
   status: string,
   amount: number,
   reference: string,
-  provider: 'bold' | 'addi' | 'wompi',
+  provider: 'bold' | 'addi',
   time?: string
 ): Promise<void> {
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
@@ -206,7 +206,6 @@ export async function notifyOrderShipped(
 ): Promise<Response | null> {
   console.log('\n🚀 ===== notifyOrderShipped CALLED =====')
   console.log(`Order ID: ${order?.id}`)
-  console.log(`Order Display ID: ${order?.display_id}`)
   console.log(`Courier: ${courierName}`)
   console.log(`Tracking Number: ${trackingNumber}`)
   console.log(`Tracking URL: ${trackingUrl || 'N/A'}`)
