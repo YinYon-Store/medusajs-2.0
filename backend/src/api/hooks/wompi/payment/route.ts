@@ -85,6 +85,14 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
+  // ⚠️ Wompi está desactivado temporalmente
+  console.log("⚠️ Wompi Webhook - Servicio desactivado temporalmente");
+  return res.status(503).json({ 
+    error: "Wompi payment provider is temporarily disabled",
+    message: "Este servicio está desactivado temporalmente"
+  });
+
+  /* CÓDIGO DESACTIVADO TEMPORALMENTE - Descomentar cuando Wompi se reactive
   try {
     const scope = req.scope;
     const body = req.body as WompiWebhookBody;
@@ -256,4 +264,5 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     console.error("❌ Error procesando evento Wompi:", err);
     return res.status(500).json({ error: "Error interno" });
   }
+  */ // FIN DE CÓDIGO DESACTIVADO
 };
