@@ -586,3 +586,4 @@ export async function getPendingPaymentStatus(cartId: string) {
 **Última actualización:** 2024-01-01
 **Versión:** 1.0.0
 
+

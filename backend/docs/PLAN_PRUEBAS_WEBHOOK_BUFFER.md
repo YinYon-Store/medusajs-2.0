@@ -345,3 +345,4 @@ NOTIFICATION_SERVICE_URL=http://localhost:8080
 **Última actualización:** 2024-01-01
 **Versión:** 1.0.0
 
+

@@ -61,3 +61,4 @@ Lee el archivo `docs/IMPLEMENTACION_FRONTEND.md` que contiene:
 **Archivo principal:** `docs/IMPLEMENTACION_FRONTEND.md`
 **Fecha:** 2025-01-12
 
+
