@@ -37,7 +37,6 @@
     "@mikro-orm/postgresql": "6.4.3",
     "@react-email/components": "^0.0.26",
     "@rokmohar/medusa-plugin-meilisearch": "1.2.3",
-    "@types/redis": "^4.0.11",
     "awilix": "^8.0.1",
     "medusajs-launch-utils": "^0.0.17",
     "minio": "^8.0.3",
@@ -68,5 +67,10 @@
   "engines": {
     "node": "22.x",
     "npm": "10.x"
+  },
+  "pnpm": {
+    "overrides": {
+      "next": "^15.1.11"
+    }
   }
 }
