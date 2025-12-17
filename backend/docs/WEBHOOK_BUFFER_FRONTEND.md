@@ -624,3 +624,4 @@ Usar: `process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL` o `process.env.NEXT_PUBLIC_BA
 **Versión:** 1.0.0
 
 
+
