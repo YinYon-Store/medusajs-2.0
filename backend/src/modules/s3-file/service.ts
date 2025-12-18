@@ -10,6 +10,7 @@ import { Readable } from 'stream';
 import { Client } from 'minio';
 import path from 'path';
 import { ulid } from 'ulid';
+import { reportError, ErrorCategory } from '../../lib/firebase-service';
 
 type InjectedDependencies = {
   logger: Logger
@@ -110,7 +111,7 @@ class S3FileProviderService extends AbstractFileProviderService {
           } catch (error: any) {
             this.logger_.error(`❌ METHOD FAILED: ${methodName} - ${error.message}`)
             
-            // Reportar error a Crashlytics
+            // Reportar error a Crashlytics (sin await para no bloquear)
             reportError(
               error instanceof Error ? error : new Error(String(error)),
               ErrorCategory.S3,

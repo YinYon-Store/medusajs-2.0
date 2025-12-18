@@ -9,9 +9,6 @@ import {
   IS_DEV,
 } from './constants';
 
-// Re-export ErrorTags para uso externo
-export { ErrorTags };
-
 /**
  * Firebase Service
  * 
@@ -249,7 +246,8 @@ export async function reportError(
     };
 
     // Log como error crítico con tags
-    admin.logger().error(errorMessage, enrichedContext);
+    // Firebase Admin SDK usa Cloud Logging automáticamente cuando se loguea con console
+    console.error(`[Firebase Crashlytics] ${errorMessage}`, enrichedContext);
 
     // También loguear en consola con tags
     console.error(`[Crashlytics] [${ErrorTags.SOURCE.BACKEND}] [${category}]: ${errorMessage}`, {
@@ -364,7 +362,8 @@ export async function logEvent(
 
     // Firebase Admin SDK no tiene una API directa de Analytics
     // Usamos Cloud Logging con estructura específica para Analytics
-    admin.logger().info('Analytics Event', {
+    // Firebase Admin SDK usa Cloud Logging automáticamente cuando se loguea con console
+    console.log('[Firebase Analytics]', {
       event_name: eventName,
       ...enrichedParams,
     });

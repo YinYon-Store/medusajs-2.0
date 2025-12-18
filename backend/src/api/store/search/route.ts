@@ -66,13 +66,17 @@ export const POST = async (
   req: MedusaRequest,
   res: MedusaResponse
 ): Promise<void> => {
+  // Declarar query fuera del try para usarlo en el catch
+  let query: string | undefined;
+  
   try {
     // Rate limiting ahora se maneja por middleware centralizado
     // Los headers X-RateLimit-* se agregan automáticamente por el middleware
 
     // Parsear y obtener query del body
     const body = (typeof req.body === "string" ? JSON.parse(req.body) : req.body) as SearchRequestBody
-    const { query, limit = 20, offset = 0 } = body
+    query = body.query;
+    const { limit = 20, offset = 0 } = body
 
     // Validar query
     const validation = validateSearchQuery(query)

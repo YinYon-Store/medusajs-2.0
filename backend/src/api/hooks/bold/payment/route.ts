@@ -193,6 +193,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     // --- ✅ Orden existe, responder 200 y continuar procesamiento ---
     res.status(200).json({ status: "received" });
 
+    // --- 5️⃣ Obtener orderId antes de validar autenticidad ---
+    const orderId = orderCarts[0].order_id;
+
     // --- 4️⃣ Validar autenticidad del evento (después de confirmar que la orden existe) ---
     let rawBody: string;
     const originalReq = (req as any).raw || req;
@@ -227,8 +230,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       return; // Ya respondimos con 200, solo logueamos el error
     }
 
-    // --- 5️⃣ Buscar payment collection asociada ---
-    const orderId = orderCarts[0].order_id;
+    // --- 6️⃣ Buscar payment collection asociada ---
 
     const { data: collections } = await query.graph({
       entity: "order_payment_collection",

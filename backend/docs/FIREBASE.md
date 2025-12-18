@@ -1,4 +1,4 @@
-# Firebase Crashlytics y Analytics - Documentación Técnica
+# Firebase Crashlytics y Analytics - Documentación Completa
 
 ## 📋 Resumen Técnico
 
@@ -72,7 +72,95 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
    FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
    ```
 
-7. **Agrega la misma variable en Railway** (mismo valor, misma configuración)
+---
+
+## 🚀 Configuración en Railway
+
+Railway no permite subir archivos directamente, por lo que debes usar **variables de entorno** para las credenciales de Firebase.
+
+### Pasos para Configurar
+
+1. Ve a tu proyecto en [Railway](https://railway.app/)
+2. Selecciona tu servicio (backend)
+3. Ve a la pestaña **Variables**
+4. Agrega las siguientes variables:
+
+```bash
+# Habilitar Firebase
+FIREBASE_ENABLED=true
+
+# JSON completo del service account (una sola línea)
+# ⚠️ Reemplaza con tus credenciales reales (usa el script convert-firebase-json.ps1)
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"tu-project-id","private_key_id":"xxxxx","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-xxxxx@tu-project-id.iam.gserviceaccount.com",...}
+```
+
+**⚠️ Importante**: 
+- El JSON debe estar en **una sola línea** (sin saltos de línea)
+- Puedes usar un formatter online para convertir el JSON a una línea
+- O escapar los saltos de línea manualmente
+- **Usa la misma variable en local y producción** para mantener consistencia
+
+### Convertir JSON a Una Línea
+
+#### Opción 1: Script Automático (Recomendado)
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\convert-firebase-json.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+chmod +x scripts/convert-firebase-json.sh
+./scripts/convert-firebase-json.sh
+```
+
+El script generará la línea completa lista para copiar.
+
+#### Opción 2: Online
+- Ve a [JSON Minifier](https://jsonformatter.org/json-minify)
+- Pega tu JSON
+- Copia el resultado (una sola línea)
+- Agrégale el prefijo: `FIREBASE_SERVICE_ACCOUNT_JSON=`
+
+#### Opción 3: Manual (PowerShell)
+```powershell
+$json = Get-Content "config\firebase-service-account.json" -Raw
+$minified = ($json | ConvertFrom-Json | ConvertTo-Json -Compress)
+Write-Host "FIREBASE_SERVICE_ACCOUNT_JSON=$minified"
+```
+
+### Verificar Configuración
+
+Después de agregar las variables en Railway:
+
+1. **Redeploy** tu servicio (Railway detectará los cambios automáticamente)
+2. Ve a los **Logs** de Railway
+3. Deberías ver:
+   ```
+   ✅ Firebase inicializado correctamente (Project: tu-project-id)
+   ```
+
+Si ves un error, verifica:
+- Que el JSON sea válido (una sola línea)
+- Que no haya espacios extra al inicio/final
+- Que las comillas estén escapadas correctamente
+
+### Diferentes Ambientes
+
+Puedes usar diferentes proyectos de Firebase para cada ambiente:
+
+**Staging:**
+```
+FIREBASE_ENABLED=true
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"tu-project-id-staging",...}
+```
+
+**Producción:**
+```
+FIREBASE_ENABLED=true
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"tu-project-id",...}
+```
 
 ---
 
@@ -392,6 +480,125 @@ await logPaymentEvent(
 
 ---
 
+## 🔒 Seguridad
+
+### ✅ Buenas Prácticas
+
+- ✅ **NO** subas el archivo JSON a Git
+- ✅ **NO** lo incluyas en el código
+- ✅ Usa **Railway Secrets** (variables de entorno) para credenciales
+- ✅ Rota las credenciales periódicamente
+- ✅ Usa diferentes credenciales para staging/producción
+- ✅ **NUNCA** subas credenciales reales a Git
+- ✅ Usa siempre valores de ejemplo en documentación
+- ✅ Usa `.gitignore` para archivos con credenciales
+- ✅ Revisa los cambios antes de hacer commit
+
+### ❌ Qué NO Hacer
+
+- ❌ No subas `firebase-service-account.json` al repositorio
+- ❌ No hardcodees credenciales en el código
+- ❌ No compartas las credenciales en chats/documentos públicos
+- ❌ No uses las mismas credenciales en desarrollo y producción
+
+### ⚠️ Si Expusiste Credenciales en Git
+
+Si accidentalmente subiste credenciales reales a Git:
+
+#### 1. Rotar las Credenciales INMEDIATAMENTE
+
+**⚠️ CRÍTICO**: Las credenciales expuestas están comprometidas. Debes rotarlas inmediatamente.
+
+1. Ve a [Firebase Console](https://console.firebase.google.com/)
+2. Project Settings > Service Accounts
+3. Encuentra la cuenta de servicio que generaste (formato: `firebase-adminsdk-xxxxx@tu-project-id.iam.gserviceaccount.com`)
+4. **Elimina la clave antigua** o **desactiva la cuenta de servicio**
+5. Genera una **nueva clave privada**
+6. Actualiza las variables de entorno en Railway y local con las nuevas credenciales
+
+#### 2. Limpiar el Historial de Git
+
+Tienes dos opciones:
+
+##### Opción A: Rebase Interactivo (Recomendado)
+
+```bash
+# 1. Iniciar rebase interactivo desde antes del commit problemático
+git rebase -i <commit-anterior-al-problematico>
+
+# 2. En el editor, cambia "pick" a "edit" para el commit problemático
+# 3. Git se detendrá en ese commit
+# 4. Corrige el archivo con credenciales
+git checkout HEAD -- docs/FIREBASE.md  # o el archivo que tenga credenciales
+git add docs/FIREBASE.md
+git commit --amend --no-edit
+git rebase --continue
+
+# 5. Force push
+git push --force-with-lease
+```
+
+##### Opción B: Usar git filter-repo
+
+```bash
+# Instalar git-filter-repo (si no lo tienes)
+# Windows: pip install git-filter-repo
+# Mac: brew install git-filter-repo
+
+# Eliminar las credenciales del historial
+git filter-repo --path docs/FIREBASE.md --invert-paths --force
+
+# O reemplazar el contenido del archivo en todos los commits
+git filter-repo --path docs/FIREBASE.md --replace-text <(echo 'PRIVATE_KEY_ID_REAL==>xxxxx')
+```
+
+#### 3. Verificar que no hay más credenciales
+
+```bash
+# Buscar posibles credenciales en el código
+git log --all --full-history --source -- "*.md" | grep -i "private_key\|client_email\|service_account"
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Error: "Firebase no configurado correctamente"
+
+**Causa**: El JSON no es válido o está mal formateado.
+
+**Solución**:
+1. Verifica que el JSON sea válido usando un validador JSON
+2. Asegúrate de que esté en una sola línea
+3. Verifica que no haya espacios extra al inicio/final
+
+### Error: "Cannot parse JSON"
+
+**Causa**: El JSON tiene caracteres especiales sin escapar.
+
+**Solución**:
+1. Usa un minifier JSON online
+2. O escapa manualmente las comillas y saltos de línea
+
+### Error: "Permission denied"
+
+**Causa**: La cuenta de servicio no tiene permisos.
+
+**Solución**:
+1. Verifica en [Google Cloud Console](https://console.cloud.google.com/iam-admin/iam)
+2. Asegúrate de que la cuenta tenga rol: **Firebase Admin SDK Administrator Service Agent**
+
+### Error: "Cannot find module './firebase-service-account.json'"
+
+**Causa**: La ruta del archivo no es correcta o el archivo no existe.
+
+**Solución**:
+1. Verifica que el archivo exista en la ruta especificada
+2. Usa una ruta absoluta o relativa al directorio raíz del proyecto
+3. Considera usar `FIREBASE_SERVICE_ACCOUNT_JSON` en su lugar
+
+---
+
 ## ⚠️ Notas Importantes
 
 1. **Desarrollo**: En `NODE_ENV=development`, los errores y eventos solo se loguean en consola, no se envían a Firebase.
@@ -412,4 +619,5 @@ await logPaymentEvent(
 - [Firebase Crashlytics](https://firebase.google.com/docs/crashlytics)
 - [Cloud Logging](https://console.cloud.google.com/logs?project=tu-project-id)
 - [Cloud Logging Query Syntax](https://cloud.google.com/logging/docs/view/logging-query-language)
-
+- [Railway Environment Variables](https://docs.railway.app/develop/variables)
+- [JSON Minifier](https://jsonformatter.org/json-minify)
