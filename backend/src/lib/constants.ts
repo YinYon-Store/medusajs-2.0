@@ -246,3 +246,58 @@ export const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 export const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8080';
 export const NOTIFICATION_API_KEY = process.env.NOTIFICATION_API_KEY;
 export const NOTIFICATION_DRY_RUN = process.env.NOTIFICATION_DRY_RUN === 'true';
+
+// ============================================================================
+// RATE LIMITING CONFIGURATION
+// ============================================================================
+
+/**
+ * Rate Limiting - Enable/Disable
+ */
+export const RATE_LIMIT_ENABLED = process.env.RATE_LIMIT_ENABLED !== 'false'; // Enabled by default
+
+/**
+ * Rate Limiting - Default Configuration
+ */
+export const RATE_LIMIT_DEFAULT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_DEFAULT_WINDOW_MS || '60000', 10); // 1 minuto
+export const RATE_LIMIT_DEFAULT_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_DEFAULT_MAX_REQUESTS || '100', 10);
+
+/**
+ * Rate Limiting - Webhooks (por IP)
+ */
+export const RATE_LIMIT_WEBHOOK_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WEBHOOK_WINDOW_MS || '60000', 10); // 1 minuto
+export const RATE_LIMIT_WEBHOOK_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_WEBHOOK_MAX_REQUESTS || '10', 10);
+
+/**
+ * Rate Limiting - Admin (por usuario)
+ */
+export const RATE_LIMIT_ADMIN_WINDOW_MS = parseInt(process.env.RATE_LIMIT_ADMIN_WINDOW_MS || '60000', 10); // 1 minuto
+export const RATE_LIMIT_ADMIN_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_ADMIN_MAX_REQUESTS || '60', 10);
+
+/**
+ * Rate Limiting - Store (por IP)
+ */
+export const RATE_LIMIT_STORE_WINDOW_MS = parseInt(process.env.RATE_LIMIT_STORE_WINDOW_MS || '60000', 10); // 1 minuto
+export const RATE_LIMIT_STORE_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_STORE_MAX_REQUESTS || '100', 10);
+
+/**
+ * Rate Limiting - Search (por IP)
+ */
+export const RATE_LIMIT_SEARCH_WINDOW_MS = parseInt(process.env.RATE_LIMIT_SEARCH_WINDOW_MS || '60000', 10); // 1 minuto
+export const RATE_LIMIT_SEARCH_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_SEARCH_MAX_REQUESTS || '30', 10);
+
+/**
+ * Payload Size Limits (en bytes)
+ */
+export const PAYLOAD_MAX_SIZE_WEBHOOK = parseInt(process.env.PAYLOAD_MAX_SIZE_WEBHOOK || '51200', 10); // 50KB
+export const PAYLOAD_MAX_SIZE_ADMIN = parseInt(process.env.PAYLOAD_MAX_SIZE_ADMIN || '1048576', 10); // 1MB
+export const PAYLOAD_MAX_SIZE_STORE = parseInt(process.env.PAYLOAD_MAX_SIZE_STORE || '512000', 10); // 500KB
+export const PAYLOAD_MAX_SIZE_SEARCH = parseInt(process.env.PAYLOAD_MAX_SIZE_SEARCH || '10240', 10); // 10KB
+
+/**
+ * Request Timeouts (en milisegundos)
+ */
+export const REQUEST_TIMEOUT_WEBHOOK = parseInt(process.env.REQUEST_TIMEOUT_WEBHOOK || '5000', 10); // 5s
+export const REQUEST_TIMEOUT_ADMIN = parseInt(process.env.REQUEST_TIMEOUT_ADMIN || '30000', 10); // 30s
+export const REQUEST_TIMEOUT_STORE = parseInt(process.env.REQUEST_TIMEOUT_STORE || '10000', 10); // 10s
+export const REQUEST_TIMEOUT_SEARCH = parseInt(process.env.REQUEST_TIMEOUT_SEARCH || '3000', 10); // 3s

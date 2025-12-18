@@ -45,27 +45,7 @@ function validateSearchQuery(query: string): { valid: boolean; error?: string } 
   return { valid: true }
 }
 
-// Rate limiting simple (usar Redis o similar en producción)
-const requestCounts = new Map<string, { count: number; resetAt: number }>()
-const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minuto
-const RATE_LIMIT_MAX_REQUESTS = 30 // 30 requests por minuto
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining?: number } {
-  const now = Date.now()
-  const userLimit = requestCounts.get(ip)
-
-  if (!userLimit || now > userLimit.resetAt) {
-    requestCounts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW })
-    return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 }
-  }
-
-  if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return { allowed: false }
-  }
-
-  userLimit.count++
-  return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - userLimit.count }
-}
+// Rate limiting ahora se maneja por middleware centralizado en src/api/middlewares.ts
 
 // Handler para OPTIONS (CORS preflight)
 export const OPTIONS = async (
@@ -86,19 +66,8 @@ export const POST = async (
   res: MedusaResponse
 ): Promise<void> => {
   try {
-    // Rate limiting
-    const clientIp =
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.ip ||
-      "unknown"
-    const rateLimit = checkRateLimit(clientIp)
-
-    if (!rateLimit.allowed) {
-      res.status(429).json({
-        message: "Too many requests. Please try again later.",
-      })
-      return
-    }
+    // Rate limiting ahora se maneja por middleware centralizado
+    // Los headers X-RateLimit-* se agregan automáticamente por el middleware
 
     // Parsear y obtener query del body
     const body = (typeof req.body === "string" ? JSON.parse(req.body) : req.body) as SearchRequestBody
@@ -124,19 +93,15 @@ export const POST = async (
     })
 
     // Logging (opcional, para auditoría)
+    const clientIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.ip ||
+      "unknown"
     console.log(
       `[Search] Query: "${query}", IP: ${clientIp}, Results: ${searchResults.hits.length}`
     )
 
-    // Agregar headers de rate limit
-    if (rateLimit.remaining !== undefined) {
-      res.setHeader("X-RateLimit-Remaining", rateLimit.remaining.toString())
-      const userLimit = requestCounts.get(clientIp)
-      res.setHeader(
-        "X-RateLimit-Reset",
-        new Date(userLimit?.resetAt || Date.now()).toISOString()
-      )
-    }
+    // Headers de rate limit se agregan automáticamente por el middleware
 
     // Retornar resultados
     res.status(200).json({
