@@ -3,6 +3,7 @@ import { IOrderModuleService, IPaymentModuleService } from '@medusajs/framework/
 import { SubscriberArgs, SubscriberConfig } from '@medusajs/framework'
 import { getPaymentResult, clearPaymentResult } from '../lib/payment-buffer-service'
 import { notifyPaymentCaptured, notifyOrderCreated } from '../lib/notification-service'
+import { reportError, ErrorCategory, logEvent, AnalyticsEvent } from '../lib/firebase-service'
 
 // Log that subscriber is registered
 console.log('📋 Order created payment buffer subscriber registered - listening for events: order.placed, order.created, order.completed')
@@ -239,16 +240,49 @@ export default async function orderCreatedPaymentBufferHandler({
         })) || [])
         // Limpiar buffer aunque no haya pagos pendientes
         await clearPaymentResult(cartId)
+        
+        // Log evento de buffer procesado
+        await logEvent(AnalyticsEvent.PAYMENT_BUFFER_CLEARED, {
+          cart_id: cartId,
+          order_id: orderId,
+          provider: paymentResult.provider,
+        });
       }
     } catch (error) {
       console.error(`❌ Error capturando pago desde buffer para orden ${orderId}:`, error)
+      
+      await reportError(
+        error instanceof Error ? error : new Error(String(error)),
+        ErrorCategory.PAYMENT,
+        {
+          order_id: orderId,
+          cart_id: cartId,
+          action: 'capture_payment_from_buffer',
+        }
+      );
+      
       // No limpiar buffer si hay error, para que pueda reintentarse
       // El webhook puede llegar después y procesarlo
     }
     
     console.log('✅ Order created payment buffer subscriber completed successfully')
+    
+    // Log evento de orden creada
+    await logEvent(AnalyticsEvent.ORDER_CREATED, {
+      order_id: orderId,
+      cart_id: cartId,
+    });
   } catch (error) {
     console.error('❌ Order created payment buffer subscriber error:', error)
+    
+    await reportError(
+      error instanceof Error ? error : new Error(String(error)),
+      ErrorCategory.UNKNOWN,
+      {
+        action: 'order_created_subscriber',
+      }
+    );
+    
     // No lanzar error para no bloquear el flujo de creación de orden
   }
 }

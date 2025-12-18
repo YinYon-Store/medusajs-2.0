@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { ADDI_CALLBACK_USERNAME, ADDI_CALLBACK_PASSWORD, ADDI_TESTING_LOCAL } from "../../../../lib/constants";
 import { notifyPaymentCaptured } from "../../../../lib/notification-service";
 import { savePaymentResult, savePaymentError } from "../../../../lib/payment-buffer-service";
+import { reportError, ErrorCategory, logWebhookEvent, logPaymentEvent, AnalyticsEvent } from "../../../../lib/firebase-service";
 
 // Tipos para el webhook de ADDI
 interface AddiWebhookBody {
@@ -97,6 +98,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         // --- 1️⃣ Validar autenticación básica ---
         const authHeader = req.headers.authorization as string | undefined;
         if (!validateBasicAuth(authHeader)) {
+            await reportError(
+                new Error("ADDI webhook authentication failed"),
+                ErrorCategory.AUTHENTICATION,
+                { provider: 'addi' }
+            );
+            
+            await logWebhookEvent(AnalyticsEvent.WEBHOOK_VALIDATION_FAILED, 'addi', {
+                reason: 'authentication_failed',
+            });
+            
             return res.status(401).json({ error: "Unauthorized" });
         }
 
@@ -112,6 +123,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             currency: webhookData.currency
         });
 
+        // Log webhook recibido
+        await logWebhookEvent(AnalyticsEvent.WEBHOOK_RECEIVED, 'addi', {
+            status: webhookData.status,
+            application_id: webhookData.applicationId,
+        });
+
         // Validar campos requeridos
         if (!webhookData.orderId || !webhookData.applicationId || !webhookData.status) {
             console.error("❌ ADDI Webhook - Payload inválido:", {
@@ -119,6 +136,22 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                 hasApplicationId: !!webhookData.applicationId,
                 hasStatus: !!webhookData.status
             });
+            
+            await reportError(
+                new Error("ADDI webhook payload inválido"),
+                ErrorCategory.WEBHOOK,
+                {
+                    provider: 'addi',
+                    hasOrderId: !!webhookData.orderId,
+                    hasApplicationId: !!webhookData.applicationId,
+                    hasStatus: !!webhookData.status,
+                }
+            );
+            
+            await logWebhookEvent(AnalyticsEvent.WEBHOOK_VALIDATION_FAILED, 'addi', {
+                reason: 'invalid_payload',
+            });
+            
             return res.status(400).json({ error: "Payload inválido - campos requeridos faltantes" });
         }
 
@@ -261,6 +294,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                         console.log(`✅ ADDI Webhook - Pago capturado exitosamente`);
                         console.log(`   Application ID: ${webhookData.applicationId}`);
                         console.log(`   Monto aprobado: ${webhookData.approvedAmount} ${webhookData.currency}`);
+                        
+                        // Log evento de pago capturado
+                        await logPaymentEvent(
+                            AnalyticsEvent.PAYMENT_CAPTURED,
+                            'addi',
+                            parseFloat(webhookData.approvedAmount) || 0,
+                            webhookData.currency,
+                            {
+                                application_id: webhookData.applicationId,
+                                order_id: orderId,
+                            }
+                        );
                     } else {
                         console.log(`ℹ️ ADDI Webhook - Sin pagos pendientes para capturar`);
                     }
@@ -282,6 +327,17 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                     }
                 } catch (error) {
                     console.error(`❌ ADDI Webhook - Error capturando pago:`, error);
+                    
+                    await reportError(
+                        error instanceof Error ? error : new Error(String(error)),
+                        ErrorCategory.PAYMENT,
+                        {
+                            provider: 'addi',
+                            application_id: webhookData.applicationId,
+                            order_id: orderId,
+                            action: 'capture_payment',
+                        }
+                    );
                 }
 
                 // Send notification
@@ -342,6 +398,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     } catch (err) {
         console.error("❌ ADDI Webhook - Error procesando:", err);
+        
+        await reportError(
+            err instanceof Error ? err : new Error(String(err)),
+            ErrorCategory.WEBHOOK,
+            {
+                provider: 'addi',
+                endpoint: req.url,
+                method: req.method,
+            }
+        );
+        
+        await logWebhookEvent(AnalyticsEvent.WEBHOOK_FAILED, 'addi', {
+            error: err instanceof Error ? err.message : String(err),
+        });
         
         if (!res.headersSent) {
             return res.status(500).json({ error: "Error interno procesando el webhook" });

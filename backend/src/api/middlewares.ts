@@ -25,7 +25,7 @@ import {
   REQUEST_TIMEOUT_SEARCH,
 } from "../lib/constants";
 
-export const config: MiddlewaresConfig = {
+const config: MiddlewaresConfig = {
   routes: [
     // Webhooks de pago - Rate limiting estricto POR IP
     {
@@ -88,4 +88,8 @@ export const config: MiddlewaresConfig = {
     },
   ],
 };
+
+// Export both named and default for compatibility
+export { config };
+export default config;
 

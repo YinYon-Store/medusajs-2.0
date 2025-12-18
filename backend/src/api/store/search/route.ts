@@ -1,6 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import MeiliSearch from "meilisearch"
 import { MEILISEARCH_HOST, MEILISEARCH_ADMIN_KEY } from "../../../lib/constants"
+import { reportError, ErrorCategory, logSearchEvent, AnalyticsEvent } from "../../../lib/firebase-service"
 
 // Nombre del índice (según configuración del plugin en medusa-config.js)
 const MEILISEARCH_INDEX_NAME = "products"
@@ -101,6 +102,20 @@ export const POST = async (
       `[Search] Query: "${query}", IP: ${clientIp}, Results: ${searchResults.hits.length}`
     )
 
+    // Log evento de búsqueda exitosa
+    await logSearchEvent(
+      AnalyticsEvent.SEARCH_PERFORMED,
+      query,
+      searchResults.hits.length,
+      searchResults.processingTimeMs,
+      {
+        limit: searchResults.limit,
+        offset: searchResults.offset,
+        estimated_total: searchResults.estimatedTotalHits,
+        client_ip: clientIp,
+      }
+    )
+
     // Headers de rate limit se agregan automáticamente por el middleware
 
     // Retornar resultados
@@ -114,6 +129,28 @@ export const POST = async (
     })
   } catch (error: any) {
     console.error("[Search Error]", error)
+
+    // Reportar error a Crashlytics
+    await reportError(
+      error instanceof Error ? error : new Error(String(error)),
+      ErrorCategory.SEARCH,
+      {
+        query: query,
+        endpoint: req.url,
+        method: req.method,
+      }
+    )
+
+    // Log evento de búsqueda fallida
+    await logSearchEvent(
+      AnalyticsEvent.SEARCH_FAILED,
+      query || 'unknown',
+      undefined,
+      undefined,
+      {
+        error: error instanceof Error ? error.message : String(error),
+      }
+    )
 
     // No exponer detalles internos al cliente
     res.status(500).json({
@@ -150,6 +187,18 @@ export const GET = async (
     return POST(req, res)
   } catch (error: any) {
     console.error("[Search GET Error]", error)
+    
+    // Reportar error a Crashlytics
+    await reportError(
+      error instanceof Error ? error : new Error(String(error)),
+      ErrorCategory.SEARCH,
+      {
+        query: req.query.q as string,
+        endpoint: req.url,
+        method: req.method,
+      }
+    )
+
     res.status(500).json({
       message: "An error occurred while searching. Please try again later.",
     })

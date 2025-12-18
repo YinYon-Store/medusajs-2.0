@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { BOLD_SECRET_KEY } from "../../../../lib/constants";
 import { notifyPaymentCaptured } from "../../../../lib/notification-service";
 import { savePaymentResult, savePaymentError } from "../../../../lib/payment-buffer-service";
+import { reportError, ErrorCategory, logWebhookEvent, logPaymentEvent, AnalyticsEvent } from "../../../../lib/firebase-service";
 const { validateBoldWebhookSignature } = require("../../../../modules/providers/bold-payment/utils/bold-hash.js");
 
 // Tipos para el webhook de Bold
@@ -84,6 +85,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const webhookData = body as BoldWebhookBody;
     const { type, data } = webhookData;
 
+    // Log webhook recibido
+    await logWebhookEvent(AnalyticsEvent.WEBHOOK_RECEIVED, 'bold', {
+      event_type: type,
+      payment_id: data?.payment_id,
+    });
+
     // --- 1️⃣ Validar estructura básica del payload ---
     if (!data?.metadata?.reference || !data?.payment_id || !type) {
       console.error("❌ Payload inválido de Bold:", { 
@@ -91,6 +98,22 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         hasPaymentId: !!data?.payment_id,
         hasType: !!type
       });
+      
+      await reportError(
+        new Error("Bold webhook payload inválido"),
+        ErrorCategory.WEBHOOK,
+        {
+          provider: 'bold',
+          hasReference: !!data?.metadata?.reference,
+          hasPaymentId: !!data?.payment_id,
+          hasType: !!type,
+        }
+      );
+      
+      await logWebhookEvent(AnalyticsEvent.WEBHOOK_VALIDATION_FAILED, 'bold', {
+        reason: 'invalid_payload',
+      });
+      
       return res.status(400).json({ error: "Payload inválido" });
     }
 
@@ -185,6 +208,22 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const isValidEvent = validateBoldEvent(rawBody, signature);
     if (!isValidEvent) {
       console.error("🚨 Evento Bold no autenticado - posible ataque");
+      
+      await reportError(
+        new Error("Bold webhook no autenticado - posible ataque"),
+        ErrorCategory.AUTHENTICATION,
+        {
+          provider: 'bold',
+          payment_id: data?.payment_id,
+          order_id: orderId,
+        }
+      );
+      
+      await logWebhookEvent(AnalyticsEvent.WEBHOOK_VALIDATION_FAILED, 'bold', {
+        reason: 'authentication_failed',
+        order_id: orderId,
+      });
+      
       return; // Ya respondimos con 200, solo logueamos el error
     }
 
@@ -231,11 +270,35 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           if (payment) {
             await paymentModule.capturePayment({ payment_id: payment.id });
             console.log(`✅ Pago capturado exitosamente para Bold payment_id: ${data.payment_id}`);
+            
+            // Log evento de pago capturado
+            await logPaymentEvent(
+              AnalyticsEvent.PAYMENT_CAPTURED,
+              'bold',
+              data.amount?.total || 0,
+              data.amount?.currency || 'COP',
+              {
+                payment_id: data.payment_id,
+                order_id: orderId,
+                bold_code: data.bold_code,
+              }
+            );
           } else {
             console.log(`ℹ️ Sin pagos pendientes para capturar (payment_id: ${data.payment_id})`);
           }
         } catch (error) {
           console.error(`❌ Error capturando pago de Bold (payment_id: ${data.payment_id}):`, error);
+          
+          await reportError(
+            error instanceof Error ? error : new Error(String(error)),
+            ErrorCategory.PAYMENT,
+            {
+              provider: 'bold',
+              payment_id: data.payment_id,
+              order_id: orderId,
+              action: 'capture_payment',
+            }
+          );
         }
 
         // Send notification
@@ -245,8 +308,24 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             const reference = data.metadata?.reference || data.payment_id;
             const time = data.created_at || new Date(webhookData.time * 1000).toISOString();
             await notifyPaymentCaptured(order, type, amount, reference, 'bold', time);
+            
+            await logWebhookEvent(AnalyticsEvent.WEBHOOK_PROCESSED, 'bold', {
+              event_type: type,
+              order_id: orderId,
+              payment_id: data.payment_id,
+            });
           } catch (error) {
             console.error(`❌ Error sending payment notification:`, error);
+            
+            await reportError(
+              error instanceof Error ? error : new Error(String(error)),
+              ErrorCategory.NOTIFICATION,
+              {
+                provider: 'bold',
+                order_id: orderId,
+                payment_id: data.payment_id,
+              }
+            );
           }
         }
         break;
@@ -266,11 +345,34 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           if (payment) {
             await paymentModule.cancelPayment(payment.id);
             console.log(`⚠️ Pago cancelado por rechazo de Bold (payment_id: ${data.payment_id})`);
+            
+            // Log evento de pago rechazado
+            await logPaymentEvent(
+              AnalyticsEvent.PAYMENT_REJECTED,
+              'bold',
+              data.amount?.total || 0,
+              data.amount?.currency || 'COP',
+              {
+                payment_id: data.payment_id,
+                order_id: orderId,
+              }
+            );
           } else {
             console.log(`ℹ️ Sin pagos pendientes para cancelar (payment_id: ${data.payment_id})`);
           }
         } catch (error) {
           console.error(`❌ Error cancelando pago de Bold (payment_id: ${data.payment_id}):`, error);
+          
+          await reportError(
+            error instanceof Error ? error : new Error(String(error)),
+            ErrorCategory.PAYMENT,
+            {
+              provider: 'bold',
+              payment_id: data.payment_id,
+              order_id: orderId,
+              action: 'cancel_payment',
+            }
+          );
         }
 
         // Send notification
@@ -282,6 +384,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             await notifyPaymentCaptured(order, type, amount, reference, 'bold', time);
           } catch (error) {
             console.error(`❌ Error sending payment notification:`, error);
+            
+            await reportError(
+              error instanceof Error ? error : new Error(String(error)),
+              ErrorCategory.NOTIFICATION,
+              {
+                provider: 'bold',
+                order_id: orderId,
+                payment_id: data.payment_id,
+              }
+            );
           }
         }
         break;
@@ -321,6 +433,21 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
   } catch (err) {
     console.error("❌ Error procesando evento Bold:", err);
+    
+    await reportError(
+      err instanceof Error ? err : new Error(String(err)),
+      ErrorCategory.WEBHOOK,
+      {
+        provider: 'bold',
+        endpoint: req.url,
+        method: req.method,
+      }
+    );
+    
+    await logWebhookEvent(AnalyticsEvent.WEBHOOK_FAILED, 'bold', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    
     // Si aún no hemos respondido, enviar error 500
     if (!res.headersSent) {
       return res.status(500).json({ error: "Error interno procesando el webhook" });

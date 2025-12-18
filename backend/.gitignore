@@ -26,3 +26,13 @@ build
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Firebase Service Account credentials
+config/firebase-service-account.json
+config/firebase-json-oneline.txt
+**/firebase-service-account.json
+**/*-firebase-adminsdk-*.json
+*.json
+!package.json
+!tsconfig.json
+!tsconfig.*.json

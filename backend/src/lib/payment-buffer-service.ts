@@ -1,6 +1,7 @@
 import { createClient, RedisClientType } from "redis";
 import { REDIS_URL, DATABASE_URL } from "./constants";
 import { Modules } from "@medusajs/framework/utils";
+import { reportError, ErrorCategory, logEvent, AnalyticsEvent } from "./firebase-service";
 
 /**
  * Interface para el resultado de pago almacenado en el buffer
@@ -104,6 +105,15 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     client.on("error", (err) => {
       console.error("Redis Client Error:", err);
       redisConnected = false;
+      
+      // Reportar error de Redis
+      reportError(
+        err instanceof Error ? err : new Error(String(err)),
+        ErrorCategory.REDIS,
+        { action: 'redis_connection_error' }
+      ).catch(() => {
+        // Ignorar errores de reporte
+      });
     });
 
     client.on("connect", () => {
@@ -187,8 +197,27 @@ export async function savePaymentResult(
 
     await pool.end();
     console.log(`✅ Payment result saved to PostgreSQL buffer for cart: ${cartId}`);
+    
+    // Log evento de buffer guardado
+    await logEvent(AnalyticsEvent.PAYMENT_BUFFER_SAVED, {
+      cart_id: cartId,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      storage: 'postgresql',
+    });
   } catch (error) {
     console.error("Error saving payment result to PostgreSQL:", error);
+    
+    await reportError(
+      error instanceof Error ? error : new Error(String(error)),
+      ErrorCategory.DATABASE,
+      {
+        cart_id: cartId,
+        provider: paymentResult.provider,
+        action: 'save_payment_buffer',
+      }
+    );
+    
     throw error;
   }
 }

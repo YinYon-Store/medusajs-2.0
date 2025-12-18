@@ -225,7 +225,8 @@ async function checkSlidingWindow(
       pipeline.expire(redisKey, Math.ceil(windowMs / 1000));
 
       const results = await pipeline.exec();
-      const count = results?.[2] as number || 0;
+      // results[2] es el resultado de zCard (cardinalidad del sorted set)
+      const count = (results?.[2] as unknown as number) || 0;
 
       const remaining = Math.max(0, maxRequests - count);
       const resetAt = now + windowMs;

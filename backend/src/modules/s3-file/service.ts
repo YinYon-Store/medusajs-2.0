@@ -88,14 +88,40 @@ class S3FileProviderService extends AbstractFileProviderService {
           try {
             const result = originalMethod.apply(this, args)
             if (result && typeof result.then === 'function') {
-              return result.catch((error: any) => {
+              return result.catch(async (error: any) => {
                 this.logger_.error(`❌ METHOD FAILED: ${methodName} - ${error.message}`)
+                
+                // Reportar error a Crashlytics
+                await reportError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  ErrorCategory.S3,
+                  {
+                    method: methodName,
+                    args: JSON.stringify(args).substring(0, 500),
+                  }
+                ).catch(() => {
+                  // Ignorar errores de reporte
+                });
+                
                 throw error
               })
             }
             return result
           } catch (error: any) {
             this.logger_.error(`❌ METHOD FAILED: ${methodName} - ${error.message}`)
+            
+            // Reportar error a Crashlytics
+            reportError(
+              error instanceof Error ? error : new Error(String(error)),
+              ErrorCategory.S3,
+              {
+                method: methodName,
+                args: JSON.stringify(args).substring(0, 500),
+              }
+            ).catch(() => {
+              // Ignorar errores de reporte
+            });
+            
             throw error
           }
         }

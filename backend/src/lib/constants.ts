@@ -301,3 +301,21 @@ export const REQUEST_TIMEOUT_WEBHOOK = parseInt(process.env.REQUEST_TIMEOUT_WEBH
 export const REQUEST_TIMEOUT_ADMIN = parseInt(process.env.REQUEST_TIMEOUT_ADMIN || '30000', 10); // 30s
 export const REQUEST_TIMEOUT_STORE = parseInt(process.env.REQUEST_TIMEOUT_STORE || '10000', 10); // 10s
 export const REQUEST_TIMEOUT_SEARCH = parseInt(process.env.REQUEST_TIMEOUT_SEARCH || '3000', 10); // 3s
+
+// ============================================================================
+// FIREBASE CONFIGURATION
+// ============================================================================
+
+/**
+ * Firebase Configuration
+ * Firebase Admin SDK credentials
+ * 
+ * Recomendado: Usar FIREBASE_SERVICE_ACCOUNT_JSON (mismo formato para local y producción)
+ * Alternativa: FIREBASE_SERVICE_ACCOUNT_PATH (solo para desarrollo local)
+ */
+export const FIREBASE_ENABLED = process.env.FIREBASE_ENABLED === 'true';
+export const FIREBASE_SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT_JSON; // JSON string (recomendado)
+export const FIREBASE_SERVICE_ACCOUNT_PATH = process.env.FIREBASE_SERVICE_ACCOUNT_PATH; // Path to JSON file (fallback)
+export const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID; // Fallback: credenciales individuales
+export const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL; // Fallback: credenciales individuales
+export const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'); // Fallback: credenciales individuales

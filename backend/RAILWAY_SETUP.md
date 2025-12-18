@@ -158,3 +158,9 @@ Ambos servicios necesitan las mismas variables de entorno, excepto `MEDUSA_WORKE
 - `pnpm start:worker` - Inicia en modo worker
 - `pnpm start` - Inicia en modo compartido (por defecto, no recomendado para producción)
 
+## 🔥 Configuración de Firebase
+
+Para configurar Firebase en Railway, ver la guía completa en: [docs/RAILWAY_FIREBASE_SETUP.md](docs/RAILWAY_FIREBASE_SETUP.md)
+
+**Resumen rápido**: Usa la variable de entorno `FIREBASE_SERVICE_ACCOUNT_JSON` con el contenido del JSON en una sola línea.
+
