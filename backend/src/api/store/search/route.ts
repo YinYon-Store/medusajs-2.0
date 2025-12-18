@@ -75,6 +75,12 @@ export const OPTIONS = async (
   res.status(200).end()
 }
 
+interface SearchRequestBody {
+  query: string
+  limit?: number
+  offset?: number
+}
+
 export const POST = async (
   req: MedusaRequest,
   res: MedusaResponse
@@ -94,8 +100,9 @@ export const POST = async (
       return
     }
 
-    // Obtener query del body
-    const { query, limit = 20, offset = 0 } = req.body
+    // Parsear y obtener query del body
+    const body = (typeof req.body === "string" ? JSON.parse(req.body) : req.body) as SearchRequestBody
+    const { query, limit = 20, offset = 0 } = body
 
     // Validar query
     const validation = validateSearchQuery(query)
