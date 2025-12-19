@@ -41,3 +41,5 @@ OUTPUT_FILE="config/firebase-json-oneline.txt"
 echo "FIREBASE_SERVICE_ACCOUNT_JSON=$MINIFIED" > "$OUTPUT_FILE"
 echo "💾 También guardado en: $OUTPUT_FILE"
 
+
+

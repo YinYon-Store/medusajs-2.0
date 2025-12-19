@@ -579,3 +579,5 @@ NEXT_PUBLIC_INDEX_NAME=products
 **Última actualización:** 2025-01-12
 **Versión:** 1.0.0
 
+
+

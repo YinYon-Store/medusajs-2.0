@@ -33,3 +33,5 @@ Write-Host ""
 Write-Host "5. Después del rebase, haz push:" -ForegroundColor Yellow
 Write-Host "   git push --force-with-lease" -ForegroundColor Yellow
 
+
+
