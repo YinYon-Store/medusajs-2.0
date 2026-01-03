@@ -2,6 +2,8 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework"
 import MeiliSearch from "meilisearch"
 import { MEILISEARCH_HOST, MEILISEARCH_ADMIN_KEY } from "../../../lib/constants"
 import { reportError, ErrorCategory, logSearchEvent, AnalyticsEvent } from "../../../lib/firebase-service"
+import { IProductModuleService } from "@medusajs/framework/types"
+import { Modules } from "@medusajs/framework/utils"
 
 // Nombre del índice (según configuración del plugin en medusa-config.js)
 const MEILISEARCH_INDEX_NAME = "products"
@@ -44,6 +46,66 @@ function validateSearchQuery(query: string): { valid: boolean; error?: string } 
   }
 
   return { valid: true }
+}
+
+// Función para ordenar categorías por jerarquía (de más general a más específica)
+function sortCategoriesByHierarchy(categories: any[]): any[] {
+  if (!categories || categories.length === 0) {
+    return []
+  }
+
+  // Crear un mapa de categorías por ID para acceso rápido
+  const categoryMap = new Map<string, any>()
+  categories.forEach(cat => {
+    categoryMap.set(cat.id, cat)
+  })
+
+  // Función auxiliar para calcular la profundidad relativa de una categoría
+  // (profundidad dentro del conjunto de categorías disponibles)
+  const getRelativeDepth = (category: any): number => {
+    if (!category.parent_category_id) {
+      return 0 // Categoría raíz (sin padre)
+    }
+    const parent = categoryMap.get(category.parent_category_id)
+    if (!parent) {
+      // Si el padre no está en la lista, tratar como raíz (profundidad 0)
+      return 0
+    }
+    return 1 + getRelativeDepth(parent)
+  }
+
+  // Ordenar por profundidad relativa (menor profundidad primero = más general primero)
+  // Si tienen la misma profundidad, mantener el orden original
+  return [...categories].sort((a, b) => {
+    const depthA = getRelativeDepth(a)
+    const depthB = getRelativeDepth(b)
+    if (depthA !== depthB) {
+      return depthA - depthB
+    }
+    // Si tienen la misma profundidad, ordenar por nombre para consistencia
+    return (a.name || '').localeCompare(b.name || '')
+  })
+}
+
+// Función para transformar un hit de Meilisearch con datos del producto completo
+function transformHit(hit: any, product: any): any {
+  // Obtener categorías ordenadas por jerarquía
+  const sortedCategories = product.categories
+    ? sortCategoriesByHierarchy(product.categories).map((category: any) => ({
+        id: category.id,
+        handle: category.handle,
+        name: category.name,
+      }))
+    : []
+
+  // Construir el hit transformado
+  return {
+    ...hit,
+    handle: product.handle, // ⚠️ Usar el handle real del producto (NO el ID)
+    categories: sortedCategories,
+    collection_handle: product.collection?.handle || null,
+    collection_id: product.collection?.id || null,
+  }
 }
 
 // Rate limiting ahora se maneja por middleware centralizado en src/api/middlewares.ts
@@ -106,6 +168,45 @@ export const POST = async (
       `[Search] Query: "${query}", IP: ${clientIp}, Results: ${searchResults.hits.length}`
     )
 
+    // Obtener ProductModuleService para enriquecer los hits con datos completos
+    const productModuleService: IProductModuleService = req.scope.resolve(Modules.PRODUCT)
+
+    // Extraer IDs de productos de los hits
+    const productIds = searchResults.hits
+      .map((hit: any) => hit.id)
+      .filter((id: any) => id != null)
+
+    // Obtener productos completos con relaciones desde la base de datos
+    let productsMap = new Map<string, any>()
+    if (productIds.length > 0) {
+      const products = await productModuleService.listProducts(
+        { id: productIds },
+        {
+          relations: ["categories", "collection"],
+        }
+      )
+
+      // Crear mapa de productos por ID para acceso rápido
+      products.forEach(product => {
+        productsMap.set(product.id, product)
+      })
+    }
+
+    // Transformar hits con datos completos del producto
+    const transformedHits = searchResults.hits.map((hit: any) => {
+      const product = productsMap.get(hit.id)
+      if (product) {
+        return transformHit(hit, product)
+      }
+      // Si no se encuentra el producto, devolver el hit original pero con categorías vacías
+      return {
+        ...hit,
+        categories: [],
+        collection_handle: null,
+        collection_id: null,
+      }
+    })
+
     // Log evento de búsqueda exitosa
     await logSearchEvent(
       AnalyticsEvent.SEARCH_PERFORMED,
@@ -122,9 +223,9 @@ export const POST = async (
 
     // Headers de rate limit se agregan automáticamente por el middleware
 
-    // Retornar resultados
+    // Retornar resultados transformados
     res.status(200).json({
-      hits: searchResults.hits,
+      hits: transformedHits,
       query: searchResults.query,
       processingTimeMs: searchResults.processingTimeMs,
       limit: searchResults.limit,

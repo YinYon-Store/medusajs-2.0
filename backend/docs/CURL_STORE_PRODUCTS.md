@@ -128,3 +128,7 @@ curl -X GET "http://localhost:9000/store/products?collection_id=pcol_01&limit=12
 **Última actualización**: 2024-01-XX
 
 
+
+
+
+
