@@ -20,7 +20,9 @@
     "start:server": "node scripts/start-server.js",
     "start:worker": "node scripts/start-worker.js",
     "dev": "medusa develop",
-    "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002"
+    "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002",
+    "meilisearch:init": "medusa exec ./src/scripts/init-meilisearch.ts",
+    "meilisearch:reindex": "medusa exec ./src/scripts/reindex-meilisearch.ts"
   },
   "dependencies": {
     "@medusajs/admin-sdk": "2.8.8",

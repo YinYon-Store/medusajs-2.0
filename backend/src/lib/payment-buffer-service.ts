@@ -72,10 +72,8 @@ async function ensureTableExists(): Promise<void> {
     `);
 
     await pool.end();
-    console.log("✅ pending_payment_results table ensured");
   } catch (error) {
-    console.error("Error ensuring pending_payment_results table:", error);
-    // No lanzar error, solo loguear
+    console.error("[PaymentBuffer] Error ensuring table:", error);
   }
 }
 
@@ -103,21 +101,17 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     });
 
     client.on("error", (err) => {
-      console.error("Redis Client Error:", err);
+      console.error("[PaymentBuffer] Redis error:", err);
       redisConnected = false;
       
-      // Reportar error de Redis
       reportError(
         err instanceof Error ? err : new Error(String(err)),
         ErrorCategory.REDIS,
         { action: 'redis_connection_error' }
-      ).catch(() => {
-        // Ignorar errores de reporte
-      });
+      ).catch(() => {});
     });
 
     client.on("connect", () => {
-      console.log("Redis Client Connected");
       redisConnected = true;
     });
 
@@ -126,7 +120,7 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     redisConnected = true;
     return redisClient;
   } catch (error) {
-    console.warn("Failed to connect to Redis, will use PostgreSQL fallback:", error);
+    console.warn("[PaymentBuffer] Redis unavailable, using PostgreSQL fallback");
     redisConnected = false;
     return null;
   }
@@ -153,10 +147,8 @@ export async function savePaymentResult(
     try {
       const key = `payment_result:${cartId}`;
       await redis.setEx(key, BUFFER_TTL_SECONDS, JSON.stringify(paymentResult));
-      console.log(`✅ Payment result saved to Redis buffer for cart: ${cartId}`);
       return;
     } catch (error) {
-      console.error("Error saving to Redis, falling back to PostgreSQL:", error);
       // Continuar con fallback a PostgreSQL
     }
   }
@@ -196,9 +188,7 @@ export async function savePaymentResult(
     );
 
     await pool.end();
-    console.log(`✅ Payment result saved to PostgreSQL buffer for cart: ${cartId}`);
     
-    // Log evento de buffer guardado
     await logEvent(AnalyticsEvent.PAYMENT_BUFFER_SAVED, {
       cart_id: cartId,
       provider: paymentResult.provider,
@@ -206,7 +196,7 @@ export async function savePaymentResult(
       storage: 'postgresql',
     });
   } catch (error) {
-    console.error("Error saving payment result to PostgreSQL:", error);
+    console.error("[PaymentBuffer] Error saving to PostgreSQL:", error);
     
     await reportError(
       error instanceof Error ? error : new Error(String(error)),
@@ -234,13 +224,10 @@ export async function getPaymentResult(cartId: string): Promise<PaymentResult | 
       const key = `payment_result:${cartId}`;
       const data = await redis.get(key);
       if (data && typeof data === "string") {
-        const result = JSON.parse(data) as PaymentResult;
-        console.log(`✅ Payment result retrieved from Redis buffer for cart: ${cartId}`);
-        return result;
+        return JSON.parse(data) as PaymentResult;
       }
       return null;
     } catch (error) {
-      console.error("Error reading from Redis, falling back to PostgreSQL:", error);
       // Continuar con fallback a PostgreSQL
     }
   }
@@ -278,10 +265,9 @@ export async function getPaymentResult(cartId: string): Promise<PaymentResult | 
       webhook_received_at: row.webhook_received_at.toISOString(),
     };
 
-    console.log(`✅ Payment result retrieved from PostgreSQL buffer for cart: ${cartId}`);
     return paymentResult;
   } catch (error) {
-    console.error("Error reading payment result from PostgreSQL:", error);
+    console.error("[PaymentBuffer] Error reading from PostgreSQL:", error);
     return null;
   }
 }
@@ -296,10 +282,8 @@ export async function clearPaymentResult(cartId: string): Promise<void> {
     try {
       const key = `payment_result:${cartId}`;
       await redis.del(key);
-      console.log(`✅ Payment result cleared from Redis buffer for cart: ${cartId}`);
       return;
     } catch (error) {
-      console.error("Error clearing from Redis, falling back to PostgreSQL:", error);
       // Continuar con fallback a PostgreSQL
     }
   }
@@ -320,10 +304,8 @@ export async function clearPaymentResult(cartId: string): Promise<void> {
     );
 
     await pool.end();
-    console.log(`✅ Payment result cleared from PostgreSQL buffer for cart: ${cartId}`);
   } catch (error) {
-    console.error("Error clearing payment result from PostgreSQL:", error);
-    // No lanzar error, solo loguear
+    console.error("[PaymentBuffer] Error clearing from PostgreSQL:", error);
   }
 }
 
@@ -353,7 +335,6 @@ export async function savePaymentError(
           },
         },
       ]);
-      console.log(`✅ Payment error saved to cart metadata for cart: ${cartId}`);
       return;
     }
 
@@ -383,9 +364,8 @@ export async function savePaymentError(
     );
 
     await pool.end();
-    console.log(`✅ Payment error saved to cart metadata for cart: ${cartId}`);
   } catch (error) {
-    console.error("Error saving payment error to cart metadata:", error);
+    console.error("[PaymentBuffer] Error saving payment error:", error);
     throw error;
   }
 }
@@ -400,9 +380,8 @@ export async function closeRedisConnection(): Promise<void> {
       await redisClient.quit();
       redisConnected = false;
       redisClient = null;
-      console.log("Redis connection closed");
     } catch (error) {
-      console.error("Error closing Redis connection:", error);
+      console.error("[PaymentBuffer] Error closing Redis:", error);
     }
   }
 }

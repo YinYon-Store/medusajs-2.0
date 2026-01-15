@@ -31,7 +31,6 @@ function initializeFirebase(): void {
   }
 
   if (!FIREBASE_ENABLED) {
-    console.log('⚠️ Firebase está deshabilitado (FIREBASE_ENABLED=false)');
     return;
   }
 
@@ -40,7 +39,6 @@ function initializeFirebase(): void {
     if (admin.apps.length > 0) {
       firebaseApp = admin.app();
       isInitialized = true;
-      console.log('✅ Firebase ya estaba inicializado');
       return;
     }
 
@@ -51,8 +49,7 @@ function initializeFirebase(): void {
       try {
         credential = JSON.parse(FIREBASE_SERVICE_ACCOUNT_JSON);
       } catch (error) {
-        console.error('❌ Error parseando FIREBASE_SERVICE_ACCOUNT_JSON:', error);
-        console.error('   Verifica que el JSON sea válido y esté en una sola línea');
+        console.error('[Firebase] Error parsing service account JSON:', error);
         return;
       }
     }
@@ -70,9 +67,7 @@ function initializeFirebase(): void {
         
         // Verificar que el archivo existe
         if (!fs.existsSync(absolutePath)) {
-          console.error(`❌ Firebase: Archivo no encontrado en: ${absolutePath}`);
-          console.error(`   Ruta configurada: ${FIREBASE_SERVICE_ACCOUNT_PATH}`);
-          console.error(`   Directorio actual: ${process.cwd()}`);
+          console.error(`[Firebase] File not found: ${absolutePath}`);
           return;
         }
         
@@ -80,7 +75,7 @@ function initializeFirebase(): void {
         const fileContent = fs.readFileSync(absolutePath, 'utf8');
         credential = JSON.parse(fileContent);
       } catch (error) {
-        console.error('❌ Error leyendo archivo de credenciales de Firebase:', error);
+        console.error('[Firebase] Error reading credentials file:', error);
         return;
       }
     }
@@ -92,7 +87,7 @@ function initializeFirebase(): void {
         privateKey: FIREBASE_PRIVATE_KEY,
       };
     } else {
-      console.warn('⚠️ Firebase no configurado correctamente. Se requiere FIREBASE_SERVICE_ACCOUNT_JSON (recomendado) o FIREBASE_SERVICE_ACCOUNT_PATH o credenciales individuales.');
+      console.warn('[Firebase] Configuration missing');
       return;
     }
 
@@ -102,9 +97,8 @@ function initializeFirebase(): void {
     });
 
     isInitialized = true;
-    console.log(`✅ Firebase inicializado correctamente (Project: ${credential.projectId})`);
   } catch (error) {
-    console.error('❌ Error inicializando Firebase:', error);
+    console.error('[Firebase] Initialization error:', error);
     firebaseApp = null;
     isInitialized = false;
   }
@@ -204,60 +198,35 @@ export async function reportError(
   }
 
   try {
-    // En desarrollo, solo loguear (no enviar a Crashlytics)
-    if (IS_DEV) {
-      console.error(`[Firebase Crashlytics - ${category}]`, error, context);
-      return;
-    }
-
-    // Firebase Crashlytics se integra automáticamente con el logging
-    // Usamos el logger de Firebase para reportar errores
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : undefined;
 
-    // Determinar ambiente
     const environment = process.env.NODE_ENV === 'production' 
       ? ErrorTags.ENVIRONMENT.PRODUCTION 
       : process.env.NODE_ENV === 'staging'
       ? ErrorTags.ENVIRONMENT.STAGING
       : ErrorTags.ENVIRONMENT.DEVELOPMENT;
 
-    // Agregar tags automáticos para identificar backend
     const enrichedContext = {
-      // Tags de identificación
       source: ErrorTags.SOURCE.BACKEND,
       environment,
       service_type: ErrorTags.SOURCE.API,
-      
-      // Categoría y detalles del error
       category,
       error_type: error instanceof Error ? error.constructor.name : 'String',
-      
-      // Stack trace si está disponible
       stack: errorStack,
-      
-      // Contexto original
       ...context,
-      
-      // Metadata adicional
       timestamp: new Date().toISOString(),
       node_version: process.version,
       platform: process.platform,
     };
 
-    // Log como error crítico con tags
-    // Firebase Admin SDK usa Cloud Logging automáticamente cuando se loguea con console
-    console.error(`[Firebase Crashlytics] ${errorMessage}`, enrichedContext);
-
-    // También loguear en consola con tags
-    console.error(`[Crashlytics] [${ErrorTags.SOURCE.BACKEND}] [${category}]: ${errorMessage}`, {
-      source: ErrorTags.SOURCE.BACKEND,
-      environment,
-      ...context,
-    });
+    if (IS_DEV) {
+      console.error(`[Crashlytics] [${category}] ${errorMessage}`, context);
+    } else {
+      console.error(`[Crashlytics] ${errorMessage}`, enrichedContext);
+    }
   } catch (err) {
-    // No fallar si Firebase tiene problemas
-    console.error('Error reportando a Crashlytics:', err);
+    console.error('[Firebase] Error reporting to Crashlytics:', err);
   }
 }
 
@@ -333,46 +302,30 @@ export async function logEvent(
   }
 
   try {
-    // En desarrollo, solo loguear
-    if (IS_DEV) {
-      console.log(`[Firebase Analytics] ${eventName}`, params);
-      return;
-    }
-
-    // Determinar ambiente
     const environment = process.env.NODE_ENV === 'production' 
       ? ErrorTags.ENVIRONMENT.PRODUCTION 
       : process.env.NODE_ENV === 'staging'
       ? ErrorTags.ENVIRONMENT.STAGING
       : ErrorTags.ENVIRONMENT.DEVELOPMENT;
 
-    // Agregar tags automáticos para identificar backend
     const enrichedParams = {
-      // Tags de identificación
       source: ErrorTags.SOURCE.BACKEND,
       environment,
       service_type: ErrorTags.SOURCE.API,
-      
-      // Parámetros originales
       ...params,
-      
-      // Metadata adicional
       timestamp: new Date().toISOString(),
     };
 
-    // Firebase Admin SDK no tiene una API directa de Analytics
-    // Usamos Cloud Logging con estructura específica para Analytics
-    // Firebase Admin SDK usa Cloud Logging automáticamente cuando se loguea con console
-    console.log('[Firebase Analytics]', {
-      event_name: eventName,
-      ...enrichedParams,
-    });
-
-    // También loguear en consola para debugging
-    console.log(`[Analytics] [${ErrorTags.SOURCE.BACKEND}] ${eventName}`, enrichedParams);
+    if (IS_DEV) {
+      console.log(`[Analytics] ${eventName}`, params);
+    } else {
+      console.log('[Analytics]', {
+        event_name: eventName,
+        ...enrichedParams,
+      });
+    }
   } catch (err) {
-    // No fallar si Firebase tiene problemas
-    console.error('Error registrando evento en Analytics:', err);
+    console.error('[Firebase] Error logging Analytics event:', err);
   }
 }
 

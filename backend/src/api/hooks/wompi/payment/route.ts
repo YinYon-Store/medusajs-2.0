@@ -44,11 +44,10 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
     // Obtener el secreto de eventos desde constantes (respeta PAYMENT_ENV)
     const eventSecret = WOMPI_EVENTS_SECRET;
     if (!eventSecret) {
-      console.error("❌ WOMPI_EVENTS_SECRET no configurado");
+      console.error("[Wompi] Events secret not configured");
       return false;
     }
 
-    // Extraer los valores de las propiedades especificadas en signature.properties
     const propertyValues: string[] = [];
     
     for (const property of signature.properties) {
@@ -56,7 +55,7 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
       if (value !== undefined) {
         propertyValues.push(value.toString());
       } else {
-        console.error(`❌ Propiedad no encontrada: ${property}`);
+        console.error(`[Wompi] Property not found: ${property}`);
         return false;
       }
     }
@@ -85,8 +84,7 @@ async function validateWompiEvent(eventData: any): Promise<boolean> {
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
-  // ⚠️ Wompi está desactivado temporalmente
-  console.log("⚠️ Wompi Webhook - Servicio desactivado temporalmente");
+  console.warn("[Wompi] Service temporarily disabled");
   return res.status(503).json({ 
     error: "Wompi payment provider is temporarily disabled",
     message: "Este servicio está desactivado temporalmente"

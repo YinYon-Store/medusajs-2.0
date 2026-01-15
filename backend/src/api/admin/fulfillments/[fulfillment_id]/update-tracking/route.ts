@@ -51,7 +51,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error("Error updating fulfillment tracking:", error)
+    console.error("[Admin] Error updating tracking:", error)
     res.status(500).json({ 
       error: "Internal server error",
       message: error instanceof Error ? error.message : "Unknown error"

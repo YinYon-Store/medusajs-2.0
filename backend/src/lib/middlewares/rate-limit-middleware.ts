@@ -40,7 +40,7 @@ export function rateLimitMiddleware(config: RateLimitConfig) {
 
       next();
     } catch (error) {
-      console.error("Rate limit middleware error:", error);
+      console.error("[Middleware] Rate limit error:", error);
       // En caso de error, permitir el request (fail open)
       next();
     }

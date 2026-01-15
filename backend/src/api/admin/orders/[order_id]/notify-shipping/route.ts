@@ -87,18 +87,15 @@ export async function POST(
       // Check if response is 200 (success)
       if (notificationResponse && notificationResponse.status === 200) {
         notificationStatus = 'notificacion exitosa'
-        console.log('✅ Notification sent successfully')
       } else if (notificationResponse) {
-        // Response exists but status is not 200
-        console.error(`❌ Notification service returned status ${notificationResponse.status}`)
+        console.error(`[Admin] Notification failed: status ${notificationResponse.status}`)
         notificationStatus = 'notificacion erronea'
       } else {
-        // Response is null (no phone, no API key, network error, etc.)
-        console.warn('⚠️ Notification service returned null - check logs for reason (missing phone, API key, or network error)')
+        console.warn('[Admin] Notification service returned null')
         notificationStatus = 'notificacion erronea'
       }
     } catch (error) {
-      console.error('❌ Error sending WhatsApp shipping notification:', error)
+      console.error('[Admin] Error sending notification:', error)
       notificationStatus = 'notificacion erronea'
     }
 
@@ -123,7 +120,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error("Error sending shipping notification:", error)
+    console.error("[Admin] Error sending shipping notification:", error)
     res.status(500).json({ 
       error: "Internal server error",
       message: error instanceof Error ? error.message : "Unknown error"

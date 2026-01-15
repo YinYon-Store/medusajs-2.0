@@ -61,19 +61,18 @@ function validateBoldEvent(rawBody: string, signature: string): boolean {
     const secretKey = BOLD_SECRET_KEY;
     
     if (!secretKey) {
-      console.error("❌ BOLD_SECRET_KEY no configurado");
+      console.error("[Bold] Secret key not configured");
       return false;
     }
 
     if (!signature) {
-      console.error("❌ x-bold-signature no presente en el header");
+      console.error("[Bold] Signature header missing");
       return false;
     }
 
-    const isValid = validateBoldWebhookSignature(rawBody, signature, secretKey);
-    return isValid;
+    return validateBoldWebhookSignature(rawBody, signature, secretKey);
   } catch (error) {
-    console.error("Error validando evento de Bold:", error);
+    console.error("[Bold] Validation error:", error);
     return false;
   }
 }
@@ -93,11 +92,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     // --- 1️⃣ Validar estructura básica del payload ---
     if (!data?.metadata?.reference || !data?.payment_id || !type) {
-      console.error("❌ Payload inválido de Bold:", { 
-        hasReference: !!data?.metadata?.reference,
-        hasPaymentId: !!data?.payment_id,
-        hasType: !!type
-      });
+      console.error("[Bold] Invalid payload");
       
       await reportError(
         new Error("Bold webhook payload inválido"),
@@ -120,15 +115,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const reference = data.metadata.reference;
     
     if (!reference) {
-      console.warn("⚠️ Webhook de Bold sin reference");
+      console.warn("[Bold] Missing reference");
       return res.status(400).json({ error: "Reference no proporcionado" });
     }
 
-    // Extraer cart_id del reference
-    // El reference viene en formato: timestamp_XXXXXXXX (reemplazando "cart_" por timestamp + "_")
-    // Para reconstruir el cart_id: "cart_" + la parte después del primer "_"
     const cartId = "cart_" + reference.split("_")[1];
-    console.log("📦 Bold Webhook - reference:", reference, "-> cartId:", cartId);
 
     const scope = req.scope;
     const query = scope.resolve(ContainerRegistrationKeys.QUERY);
@@ -145,7 +136,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     // --- 3️⃣ Si NO existe orden, guardar en buffer o metadata según el tipo de evento ---
     if (!orderCarts?.length) {
-      console.log(`📦 Bold Webhook - Orden no encontrada para cart_id: ${cartId}, guardando en buffer/metadata`);
       
       if (type === "SALE_APPROVED") {
         // Guardar resultado exitoso en buffer
@@ -163,7 +153,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             card: data.card,
           },
         });
-        console.log(`✅ Bold Webhook - Resultado guardado en buffer para cart: ${cartId}`);
         return res.status(200).json({ 
           status: "received",
           message: "Payment result saved, waiting for order creation",
@@ -181,7 +170,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           },
           cartModule
         );
-        console.log(`⚠️ Bold Webhook - Error guardado en metadata del carrito: ${cartId}`);
         return res.status(200).json({ 
           status: "received",
           message: "Payment error saved to cart",
@@ -210,7 +198,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const signature = req.headers['x-bold-signature'] as string;
     const isValidEvent = validateBoldEvent(rawBody, signature);
     if (!isValidEvent) {
-      console.error("🚨 Evento Bold no autenticado - posible ataque");
+      console.error("[Bold] Unauthenticated event - possible attack");
       
       await reportError(
         new Error("Bold webhook no autenticado - posible ataque"),
@@ -239,7 +227,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     });
 
     if (!collections?.length) {
-      console.error(`❌ Payment Collection no encontrada para order_id: ${orderId}`);
+      console.error(`[Bold] Payment collection not found: ${orderId}`);
       return;
     }
 
@@ -252,7 +240,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         relations: ["shipping_address"]
       });
     } catch (error) {
-      console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
+      console.warn(`[Bold] Could not retrieve order for notifications: ${orderId}`);
     }
 
     // --- 6️⃣ Manejar cada tipo de evento ---
@@ -271,7 +259,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
           if (payment) {
             await paymentModule.capturePayment({ payment_id: payment.id });
-            console.log(`✅ Pago capturado exitosamente para Bold payment_id: ${data.payment_id}`);
+            console.log(`[Bold] Payment captured: ${data.payment_id}`);
             
             // Log evento de pago capturado
             await logPaymentEvent(
@@ -286,10 +274,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
               }
             );
           } else {
-            console.log(`ℹ️ Sin pagos pendientes para capturar (payment_id: ${data.payment_id})`);
           }
         } catch (error) {
-          console.error(`❌ Error capturando pago de Bold (payment_id: ${data.payment_id}):`, error);
+          console.error(`[Bold] Error capturing payment ${data.payment_id}:`, error);
           
           await reportError(
             error instanceof Error ? error : new Error(String(error)),
@@ -346,7 +333,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
           if (payment) {
             await paymentModule.cancelPayment(payment.id);
-            console.log(`⚠️ Pago cancelado por rechazo de Bold (payment_id: ${data.payment_id})`);
             
             // Log evento de pago rechazado
             await logPaymentEvent(
@@ -360,10 +346,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
               }
             );
           } else {
-            console.log(`ℹ️ Sin pagos pendientes para cancelar (payment_id: ${data.payment_id})`);
           }
         } catch (error) {
-          console.error(`❌ Error cancelando pago de Bold (payment_id: ${data.payment_id}):`, error);
+          console.error(`[Bold] Error canceling payment ${data.payment_id}:`, error);
           
           await reportError(
             error instanceof Error ? error : new Error(String(error)),
@@ -414,27 +399,22 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
           if (payment) {
             await paymentModule.cancelPayment(payment.id);
-            console.log(`✅ Anulación procesada exitosamente para Bold payment_id: ${data.payment_id}`);
-          } else {
-            console.log(`ℹ️ Sin pagos para anular (payment_id: ${data.payment_id})`);
           }
         } catch (error) {
-          console.error(`❌ Error procesando anulación de Bold (payment_id: ${data.payment_id}):`, error);
+          console.error(`[Bold] Error processing void ${data.payment_id}:`, error);
         }
         break;
 
       case "VOID_REJECTED":
-        // Anulación rechazada - solo loguear
-        console.log(`⚠️ Anulación rechazada por Bold (payment_id: ${data.payment_id})`);
         break;
 
       default:
-        console.warn(`⚠️ Tipo de evento Bold no reconocido: ${type}`);
+        console.warn(`[Bold] Unknown event type: ${type}`);
         break;
     }
 
   } catch (err) {
-    console.error("❌ Error procesando evento Bold:", err);
+    console.error("[Bold] Error processing event:", err);
     
     await reportError(
       err instanceof Error ? err : new Error(String(err)),

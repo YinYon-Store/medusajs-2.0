@@ -28,6 +28,39 @@ function getMeilisearchClient(): MeiliSearch {
   return meilisearchClient
 }
 
+// Helper function to retry a Meilisearch operation with exponential backoff
+async function retryMeilisearchOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Don't retry on validation errors or client errors (4xx)
+      if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+        throw error;
+      }
+      
+      // If it's the last attempt, throw the error
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff
+      const delay = baseDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 // Validación de query
 function validateSearchQuery(query: string): { valid: boolean; error?: string } {
   if (!query || typeof query !== "string") {
@@ -153,11 +186,15 @@ export const POST = async (
     const client = getMeilisearchClient()
     const index = client.index(MEILISEARCH_INDEX_NAME)
 
-    // Realizar búsqueda
-    const searchResults = await index.search(query, {
-      limit: Math.min(Number(limit), 100), // Máximo 100 resultados
-      offset: Math.max(Number(offset), 0),
-    })
+    // Realizar búsqueda con retry logic
+    const searchResults = await retryMeilisearchOperation(
+      () => index.search(query, {
+        limit: Math.min(Number(limit), 100), // Máximo 100 resultados
+        offset: Math.max(Number(offset), 0),
+      }),
+      3, // 3 retries
+      1000 // 1 second base delay
+    )
 
     // Logging (opcional, para auditoría)
     const clientIp =
@@ -233,7 +270,26 @@ export const POST = async (
       estimatedTotalHits: searchResults.estimatedTotalHits,
     })
   } catch (error: any) {
-    console.error("[Search Error]", error)
+    // Determine error type and provide better diagnostics
+    const isNetworkError = 
+      error?.name === 'MeiliSearchCommunicationError' ||
+      error?.message?.includes('fetch failed') ||
+      error?.message?.includes('ECONNREFUSED') ||
+      error?.message?.includes('ETIMEDOUT') ||
+      error?.code === 'ECONNREFUSED' ||
+      error?.code === 'ETIMEDOUT';
+
+    if (isNetworkError) {
+      console.error("[Search Error] Network/Connection error:", {
+        message: error?.message,
+        code: error?.code,
+        name: error?.name,
+        host: MEILISEARCH_HOST,
+        query: query,
+      });
+    } else {
+      console.error("[Search Error]", error);
+    }
 
     // Reportar error a Crashlytics
     await reportError(
@@ -243,6 +299,9 @@ export const POST = async (
         query: query,
         endpoint: req.url,
         method: req.method,
+        isNetworkError: isNetworkError,
+        errorCode: error?.code,
+        errorName: error?.name,
       }
     )
 
@@ -254,12 +313,17 @@ export const POST = async (
       undefined,
       {
         error: error instanceof Error ? error.message : String(error),
+        errorType: isNetworkError ? 'network' : 'other',
       }
     )
 
-    // No exponer detalles internos al cliente
+    // Provide more specific error message for network errors
+    const errorMessage = isNetworkError
+      ? "Search service is temporarily unavailable. Please try again in a moment."
+      : "An error occurred while searching. Please try again later.";
+
     res.status(500).json({
-      message: "An error occurred while searching. Please try again later.",
+      message: errorMessage,
     })
   }
 }

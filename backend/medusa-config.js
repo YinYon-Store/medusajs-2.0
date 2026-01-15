@@ -302,7 +302,10 @@ function buildPlugins() {
   const plugins = [];
 
   // Meilisearch plugin
-  if (MEILISEARCH_HOST && MEILISEARCH_ADMIN_KEY) {
+  // Skip loading if MEILISEARCH_DISABLED is set to 'true' to allow server to start when Meilisearch is unavailable
+  const meilisearchDisabled = process.env.MEILISEARCH_DISABLED === 'true';
+  
+  if (!meilisearchDisabled && MEILISEARCH_HOST && MEILISEARCH_ADMIN_KEY) {
     plugins.push({
       resolve: '@rokmohar/medusa-plugin-meilisearch',
       options: {
@@ -325,6 +328,8 @@ function buildPlugins() {
         }
       }
     });
+  } else if (meilisearchDisabled) {
+    console.log('⚠️  Meilisearch plugin is disabled (MEILISEARCH_DISABLED=true). Search functionality will be limited.');
   }
 
   return plugins;

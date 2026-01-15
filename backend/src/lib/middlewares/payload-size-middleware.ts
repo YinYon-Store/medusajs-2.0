@@ -44,7 +44,7 @@ export function payloadSizeMiddleware(options: { maxSize: number }) {
 
       next();
     } catch (error) {
-      console.error("Payload size middleware error:", error);
+      console.error("[Middleware] Payload size error:", error);
       // En caso de error, permitir el request (fail open)
       next();
     }

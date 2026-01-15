@@ -37,7 +37,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       },
     });
   } catch (error) {
-    console.error("Error in GET /store/payment-status/:cart_id:", error);
+    console.error("[Store] Error getting payment status:", error);
     return res.status(500).json({
       message: "Error retrieving payment status",
     });

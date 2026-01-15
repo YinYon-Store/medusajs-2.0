@@ -20,9 +20,7 @@ interface AddiWebhookBody {
  * ADDI envía las credenciales en el header Authorization como Basic base64(username:password)
  */
 function validateBasicAuth(authHeader: string | undefined): boolean {
-    // Si ADDI_TESTING_LOCAL está activado, bypass la autenticación
     if (ADDI_TESTING_LOCAL) {
-        console.warn("⚠️  ADDI_TESTING_LOCAL=true: Autenticación deshabilitada para pruebas locales");
         return true;
     }
 
@@ -35,18 +33,17 @@ function validateBasicAuth(authHeader: string | undefined): boolean {
     const effectivePassword = ADDI_CALLBACK_PASSWORD || (isDevelopment ? testPassword : null);
     
     if (!effectivePassword) {
-        console.error("❌ ADDI Webhook - ADDI_CALLBACK_PASSWORD no configurado");
+        console.error("[Addi] Callback password not configured");
         return false;
     }
 
     if (!authHeader) {
-        console.error("❌ ADDI Webhook - No Authorization header presente");
+        console.error("[Addi] Authorization header missing");
         return false;
     }
 
-    // El header debe ser "Basic base64(username:password)"
     if (!authHeader.startsWith("Basic ")) {
-        console.error("❌ ADDI Webhook - Authorization header no es Basic");
+        console.error("[Addi] Invalid authorization header");
         return false;
     }
 
@@ -60,18 +57,11 @@ function validateBasicAuth(authHeader: string | undefined): boolean {
                        password === effectivePassword;
         
         if (!isValid) {
-            console.error("❌ ADDI Webhook - Credenciales inválidas");
-            if (isDevelopment) {
-                console.warn(`⚠️  En desarrollo, puedes usar: ${testUsername}:${testPassword}`);
-                console.warn(`⚠️  O configurar ADDI_TESTING_LOCAL=true para deshabilitar autenticación`);
-            }
-        } else if (isDevelopment && password === testPassword) {
-            console.warn("⚠️  MODO PRUEBA: Usando credenciales de prueba (solo en desarrollo)");
+            console.error("[Addi] Invalid credentials");
         }
-
         return isValid;
     } catch (error) {
-        console.error("❌ ADDI Webhook - Error decodificando credenciales:", error);
+        console.error("[Addi] Error decoding credentials:", error);
         return false;
     }
 }
@@ -92,8 +82,6 @@ function getStatusMessage(status: AddiWebhookBody["status"]): string {
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
-    console.log("📥 ADDI Webhook - Recibiendo callback...");
-
     try {
         // --- 1️⃣ Validar autenticación básica ---
         const authHeader = req.headers.authorization as string | undefined;
@@ -115,15 +103,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
         const webhookData = body as AddiWebhookBody;
 
-        console.log("📦 ADDI Webhook - Payload recibido:", {
-            orderId: webhookData.orderId,
-            applicationId: webhookData.applicationId,
-            status: webhookData.status,
-            approvedAmount: webhookData.approvedAmount,
-            currency: webhookData.currency
-        });
-
-        // Log webhook recibido
         await logWebhookEvent(AnalyticsEvent.WEBHOOK_RECEIVED, 'addi', {
             status: webhookData.status,
             application_id: webhookData.applicationId,
@@ -131,11 +110,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
         // Validar campos requeridos
         if (!webhookData.orderId || !webhookData.applicationId || !webhookData.status) {
-            console.error("❌ ADDI Webhook - Payload inválido:", {
-                hasOrderId: !!webhookData.orderId,
-                hasApplicationId: !!webhookData.applicationId,
-                hasStatus: !!webhookData.status
-            });
+            console.error("[Addi] Invalid payload");
             
             await reportError(
                 new Error("ADDI webhook payload inválido"),
@@ -169,16 +144,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         try {
             cart = await cartModule.retrieveCart(cartId);
         } catch (error) {
-            console.error(`❌ ADDI Webhook - Carrito no encontrado: ${cartId}`);
+            console.error(`[Addi] Cart not found: ${cartId}`);
             return res.status(400).json({ error: `Carrito no encontrado: ${cartId}` });
         }
 
         if (!cart) {
-            console.error(`❌ ADDI Webhook - Carrito no encontrado: ${cartId}`);
+            console.error(`[Addi] Cart not found: ${cartId}`);
             return res.status(400).json({ error: `Carrito no encontrado: ${cartId}` });
         }
-
-        console.log(`✅ ADDI Webhook - Carrito encontrado: ${cartId}`);
 
         // --- 4️⃣ Buscar la orden asociada al carrito ---
         const { data: orderCarts } = await query.graph({
@@ -189,11 +162,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
         // --- 5️⃣ Si NO existe orden, guardar en buffer o metadata según el estado ---
         if (!orderCarts?.length) {
-            console.log(`📦 ADDI Webhook - Orden no encontrada para cart_id: ${cartId}, guardando en buffer/metadata`);
-            
-            // Manejar estado PENDING con error 402 (ADDI requiere esto)
             if (webhookData.status === "PENDING") {
-                console.log(`⏳ ADDI Webhook - Estado PENDING, retornando 402`);
                 return res.status(402).json({
                     ...webhookData,
                     message: "Pago pendiente de validación"
@@ -213,7 +182,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                         statusTimestamp: webhookData.statusTimestamp,
                     },
                 });
-                console.log(`✅ ADDI Webhook - Resultado guardado en buffer para cart: ${cartId}`);
                 return res.status(200).json({
                     ...webhookData,
                     message: "Payment result saved, waiting for order creation"
@@ -230,7 +198,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                     },
                     cartModule
                 );
-                console.log(`⚠️ ADDI Webhook - Error guardado en metadata del carrito: ${cartId}`);
                 return res.status(200).json({
                     ...webhookData,
                     message: "Payment error saved to cart"
@@ -239,11 +206,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         }
 
         const orderId = orderCarts[0].order_id;
-        console.log(`✅ ADDI Webhook - Orden encontrada: ${orderId}`);
 
         // --- 6️⃣ Manejar estado PENDING con error 402 (solo si existe orden) ---
         if (webhookData.status === "PENDING") {
-            console.log(`⏳ ADDI Webhook - Estado PENDING, retornando 402`);
             return res.status(402).json({
                 ...webhookData,
                 message: "Pago pendiente de validación"
@@ -258,8 +223,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         });
 
         if (!collections?.length) {
-            console.error(`❌ ADDI Webhook - Payment Collection no encontrada para order_id: ${orderId}`);
-            // Aún así respondemos 200 con el body para no causar reintentos innecesarios
+            console.error(`[Addi] Payment collection not found: ${orderId}`);
             return res.status(200).json(webhookData);
         }
 
@@ -272,7 +236,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                 relations: ["shipping_address"]
             });
         } catch (error) {
-            console.warn(`⚠️ Could not retrieve order ${orderId} for notifications:`, error);
+            console.warn(`[Addi] Could not retrieve order for notifications: ${orderId}`);
         }
 
         // --- 8️⃣ Procesar según el status ---
@@ -291,11 +255,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
                     if (payment) {
                         await paymentModule.capturePayment({ payment_id: payment.id });
-                        console.log(`✅ ADDI Webhook - Pago capturado exitosamente`);
-                        console.log(`   Application ID: ${webhookData.applicationId}`);
-                        console.log(`   Monto aprobado: ${webhookData.approvedAmount} ${webhookData.currency}`);
-                        
-                        // Log evento de pago capturado
+                        console.log(`[Addi] Payment captured: ${webhookData.applicationId}`);
                         await logPaymentEvent(
                             AnalyticsEvent.PAYMENT_CAPTURED,
                             'addi',
@@ -306,8 +266,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                                 order_id: orderId,
                             }
                         );
-                    } else {
-                        console.log(`ℹ️ ADDI Webhook - Sin pagos pendientes para capturar`);
                     }
 
                     // Actualizar metadata de la orden con info de ADDI
@@ -323,10 +281,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                             }
                         }]);
                     } catch (metaError) {
-                        console.warn(`⚠️ ADDI Webhook - Error actualizando metadata:`, metaError);
+                        console.warn(`[Addi] Error updating metadata:`, metaError);
                     }
                 } catch (error) {
-                    console.error(`❌ ADDI Webhook - Error capturando pago:`, error);
+                    console.error(`[Addi] Error capturing payment:`, error);
                     
                     await reportError(
                         error instanceof Error ? error : new Error(String(error)),
@@ -348,7 +306,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                         const time = new Date(parseInt(webhookData.statusTimestamp) * 1000).toISOString();
                         await notifyPaymentCaptured(order, "APPROVED", amount, reference, 'addi', time);
                     } catch (error) {
-                        console.error(`❌ Error sending payment notification:`, error);
+                        console.error(`[Addi] Error sending notification:`, error);
                     }
                 }
                 break;
@@ -368,10 +326,8 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                             addi_status_message: getStatusMessage(webhookData.status)
                         }
                     }]);
-                    console.log(`⚠️ ADDI Webhook - Orden actualizada con estado: ${webhookData.status}`);
-                    console.log(`   Mensaje: ${getStatusMessage(webhookData.status)}`);
                 } catch (error) {
-                    console.error(`❌ ADDI Webhook - Error actualizando metadata de orden:`, error);
+                    console.error(`[Addi] Error updating order metadata:`, error);
                 }
 
                 // Send notification
@@ -382,22 +338,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
                         const time = new Date(parseInt(webhookData.statusTimestamp) * 1000).toISOString();
                         await notifyPaymentCaptured(order, webhookData.status, amount, reference, 'addi', time);
                     } catch (error) {
-                        console.error(`❌ Error sending payment notification:`, error);
+                        console.error(`[Addi] Error sending notification:`, error);
                     }
                 }
                 break;
 
             default:
-                console.warn(`⚠️ ADDI Webhook - Estado no reconocido: ${webhookData.status}`);
+                console.warn(`[Addi] Unknown status: ${webhookData.status}`);
                 break;
         }
 
-        // --- 8️⃣ Responder con el mismo objeto recibido (requerido por ADDI) ---
-        console.log(`✅ ADDI Webhook - Procesamiento completado, respondiendo 200`);
         return res.status(200).json(webhookData);
 
     } catch (err) {
-        console.error("❌ ADDI Webhook - Error procesando:", err);
+        console.error("[Addi] Error processing webhook:", err);
         
         await reportError(
             err instanceof Error ? err : new Error(String(err)),

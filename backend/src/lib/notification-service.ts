@@ -75,24 +75,13 @@ async function callNotificationService(
   endpoint: string,
   payload: any
 ): Promise<Response | null> {
-  // Log the notification payload - ALWAYS log first
-  console.log('\n📤 ===== NOTIFICATION SERVICE REQUEST =====')
-  console.log(`📍 Endpoint: ${NOTIFICATION_SERVICE_URL}${endpoint}`)
-  console.log(`📋 Method: POST`)
-  console.log(`🔑 API Key configured: ${NOTIFICATION_API_KEY ? 'YES' : 'NO'}`)
-  console.log(`🧪 Dry Run Mode: ${NOTIFICATION_DRY_RUN ? 'YES' : 'NO'}`)
-  console.log(`📦 Payload:`)
-  console.log(JSON.stringify(payload, null, 2))
-  console.log('==========================================\n')
-
-  // In dry run mode, don't actually call the service but return a mock success response
   if (NOTIFICATION_DRY_RUN) {
-    console.log('🧪 DRY RUN MODE: Notification logged but NOT sent to service')
+    console.log(`[Notification] DRY RUN: ${endpoint}`)
     return createMockResponse(200)
   }
 
   if (!NOTIFICATION_API_KEY) {
-    console.warn('⚠️ NOTIFICATION_API_KEY not configured, skipping notification')
+    console.warn('[Notification] API key not configured')
     return null
   }
 
@@ -108,20 +97,13 @@ async function callNotificationService(
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(
-        `❌ Notification service error (${response.status}):`,
-        errorText
-      )
-      // Return the response even if not ok, so caller can check status
+      console.error(`[Notification] Error ${response.status}: ${endpoint}`, errorText)
       return response
     }
 
-    console.log(`✅ Notification sent successfully to ${endpoint}`)
-    console.log('response', response)
     return response
   } catch (error) {
-    console.error(`❌ Error calling notification service ${endpoint}:`, error)
-    // Return null on network errors
+    console.error(`[Notification] Network error: ${endpoint}`, error)
     return null
   }
 }
@@ -133,7 +115,6 @@ export async function notifyOrderCreated(order: any): Promise<void> {
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
   
   if (!customerPhone) {
-    console.warn('⚠️ No customer phone found, skipping order created notification')
     return
   }
 
@@ -163,7 +144,6 @@ export async function notifyPaymentCaptured(
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
   
   if (!customerPhone) {
-    console.warn('⚠️ No customer phone found, skipping payment captured notification')
     return
   }
 
@@ -177,7 +157,6 @@ export async function notifyPaymentCaptured(
 
   // Only send notification for approved or rejected statuses
   if (!isApproved && !isRejected) {
-    console.log(`ℹ️ Payment status ${status} does not require notification`)
     return
   }
 
@@ -204,23 +183,13 @@ export async function notifyOrderShipped(
   trackingNumber: string,
   trackingUrl?: string
 ): Promise<Response | null> {
-  console.log('\n🚀 ===== notifyOrderShipped CALLED =====')
-  console.log(`Order ID: ${order?.id}`)
-  console.log(`Courier: ${courierName}`)
-  console.log(`Tracking Number: ${trackingNumber}`)
-  console.log(`Tracking URL: ${trackingUrl || 'N/A'}`)
-  
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
-  console.log(`Customer Phone: ${customerPhone || 'NOT FOUND'}`)
   
   if (!customerPhone) {
-    console.warn('⚠️ No customer phone found, skipping order shipped notification')
-    console.log('==========================================\n')
     return null
   }
 
-  console.log('📞 Calling notification service...')
-  const result = await callNotificationService('/events/order-shipped', {
+  return await callNotificationService('/events/order-shipped', {
     order_id: order.id,
     tenant_id: 'aura_perfumeria',
     customer_phone: customerPhone,
@@ -228,10 +197,5 @@ export async function notifyOrderShipped(
     tracking_number: trackingNumber,
     tracking_url: trackingUrl || '',
   })
-  
-  console.log(`📥 Notification service result: ${result ? `Response status ${result.status}` : 'null'}`)
-  console.log('==========================================\n')
-  
-  return result
 }
 

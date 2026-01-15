@@ -41,7 +41,7 @@ export function errorHandlerMiddleware(
   // Reportar error a Crashlytics
   reportError(err, category, context).catch((reportError) => {
     // No fallar si el reporte falla
-    console.error("Error reportando a Crashlytics:", reportError);
+    console.error("[Middleware] Error reporting to Crashlytics:", reportError);
   });
 
   // Continuar con el manejo de errores estándar de Medusa

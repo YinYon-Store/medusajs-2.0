@@ -59,7 +59,7 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     });
 
     client.on("error", (err) => {
-      console.error("Rate Limit Redis Client Error:", err);
+      console.error("[RateLimit] Redis error:", err);
       redisConnected = false;
     });
 
@@ -73,7 +73,7 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     redisConnected = true;
     return redisClient;
   } catch (error) {
-    console.warn("Failed to connect to Redis for rate limiting, will use in-memory fallback:", error);
+    console.warn("[RateLimit] Redis unavailable, using in-memory fallback");
     redisConnected = false;
     return null;
   }
@@ -154,7 +154,7 @@ async function checkFixedWindow(
         total: current,
       };
     } catch (error) {
-      console.error("Redis error in rate limiting, falling back to memory:", error);
+      console.error("[RateLimit] Redis error, using memory fallback");
       // Fallback a memoria
     }
   }
@@ -238,7 +238,7 @@ async function checkSlidingWindow(
         total: count,
       };
     } catch (error) {
-      console.error("Redis error in sliding window rate limiting, falling back to memory:", error);
+      console.error("[RateLimit] Redis error in sliding window, using memory fallback");
       // Fallback a memoria
     }
   }
