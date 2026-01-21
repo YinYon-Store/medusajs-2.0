@@ -6,6 +6,7 @@ import {
   payloadSizeMiddleware,
   requestTimeoutMiddleware,
 } from "../lib/middlewares";
+import { productTransformMiddleware } from "../lib/middlewares/product-transform-middleware";
 import {
   RATE_LIMIT_WEBHOOK_WINDOW_MS,
   RATE_LIMIT_WEBHOOK_MAX_REQUESTS,
@@ -84,6 +85,7 @@ const config: MiddlewaresConfig = {
         }),
         payloadSizeMiddleware({ maxSize: PAYLOAD_MAX_SIZE_STORE }),
         requestTimeoutMiddleware({ timeout: REQUEST_TIMEOUT_STORE }),
+        productTransformMiddleware(), // Transformar productos para exponer campos personalizados
       ],
     },
   ],
