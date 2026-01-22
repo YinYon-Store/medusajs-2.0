@@ -2,6 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { IProductModuleService, IPricingModuleService } from "@medusajs/framework/types";
 import { Modules } from "@medusajs/framework/utils";
 import { DATABASE_URL } from "../../../lib/constants";
+import { productCacheService } from "../../../lib/cache/product-cache-service";
 
 /**
  * Endpoint personalizado para /store/products que maneja order=order_price
@@ -20,6 +21,20 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
   // Para otros ordenamientos, simplemente no pasamos el order y Medusa usará su lógica por defecto
 
   try {
+    // ========================================================================
+    // CACHE: Intentar obtener respuesta desde caché
+    // ========================================================================
+    const cacheKey = productCacheService.generateKey(req.query as Record<string, any>)
+    const cacheStartTime = Date.now()
+    const cachedResponse = await productCacheService.get(cacheKey, req.query as Record<string, any>)
+    const cacheTime = Date.now() - cacheStartTime
+    
+    if (cachedResponse) {
+      console.log(`[ProductsRoute] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
+      return res.json(cachedResponse)
+    }
+    
+    console.log(`[ProductsRoute] Cache MISS: ${cacheKey} (${cacheTime}ms)`)
     const productModuleService: IProductModuleService = req.scope.resolve(Modules.PRODUCT);
     const pricingModuleService: IPricingModuleService = req.scope.resolve(Modules.PRICING);
 
@@ -266,12 +281,30 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
       await pool.end();
     }
 
-    res.json({
+    const response = {
       products: paginatedProducts,
       count: count,
       offset: offset,
       limit: limit,
-    });
+    };
+
+    // ========================================================================
+    // CACHE: Almacenar respuesta en caché (solo si es exitosa)
+    // Hacerlo de forma asíncrona para no bloquear la respuesta
+    // ========================================================================
+    // No esperar el cacheo - hacerlo en background para no afectar el tiempo de respuesta
+    setImmediate(async () => {
+      try {
+        // Extraer product IDs de la respuesta para indexación
+        const productIds = paginatedProducts.map((p: any) => p.id).filter(Boolean)
+        await productCacheService.set(cacheKey, response, productIds)
+      } catch (cacheError) {
+        // No bloquear la respuesta si falla el cacheo
+        console.error('[ProductsRoute] Error caching response:', cacheError)
+      }
+    })
+
+    res.json(response);
   } catch (error: any) {
     console.error('[ProductsRoute] Error:', error);
     res.status(500).json({

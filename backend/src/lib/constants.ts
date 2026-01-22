@@ -303,6 +303,32 @@ export const REQUEST_TIMEOUT_STORE = parseInt(process.env.REQUEST_TIMEOUT_STORE 
 export const REQUEST_TIMEOUT_SEARCH = parseInt(process.env.REQUEST_TIMEOUT_SEARCH || '3000', 10); // 3s
 
 // ============================================================================
+// PRODUCT CACHE CONFIGURATION
+// ============================================================================
+
+/**
+ * Product Cache - Enable/Disable
+ */
+export const PRODUCT_CACHE_ENABLED = process.env.PRODUCT_CACHE_ENABLED !== 'false'; // Enabled by default
+
+/**
+ * Product Cache - TTL (Time To Live) in seconds
+ * Default: 24 hours (86400 seconds)
+ */
+export const PRODUCT_CACHE_TTL_SECONDS = parseInt(
+  process.env.PRODUCT_CACHE_TTL_SECONDS || '86400',
+  10
+);
+
+/**
+ * Product Cache - Build from individual products
+ * When enabled, allows constructing paginated responses from individually cached products
+ * WARNING: Can be slow with many products (>1000). Disabled by default.
+ * Enable only if you have a small number of products or need this feature.
+ */
+export const PRODUCT_CACHE_BUILD_FROM_INDIVIDUAL = process.env.PRODUCT_CACHE_BUILD_FROM_INDIVIDUAL === 'true';
+
+// ============================================================================
 // FIREBASE CONFIGURATION
 // ============================================================================
 
