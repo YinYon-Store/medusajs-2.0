@@ -40,7 +40,6 @@ async function getRedisClient(): Promise<RedisClientType | null> {
         },
         // Timeouts más agresivos para mejor rendimiento
         connectTimeout: 5000,
-        commandTimeout: 3000,
       },
       // Deshabilitar comandos lentos que no necesitamos
       disableClientInfo: true,
@@ -114,7 +113,7 @@ export class ProductCacheService {
       // 1. Intentar obtener respuesta exacta
       // Usar pipeline para mejor rendimiento si necesitamos múltiples operaciones
       const cached = await redis.get(cacheKey)
-      if (cached) {
+      if (cached && typeof cached === 'string') {
         // Optimización: parsear JSON de forma más eficiente
         // Para respuestas grandes, considerar compresión en el futuro
         try {
@@ -393,7 +392,7 @@ export class ProductCacheService {
       let invalidatedCount = 0
 
       if (cacheKeys.length > 0) {
-        await redis.del(...cacheKeys)
+        await redis.del(cacheKeys)
         invalidatedCount = cacheKeys.length
       }
 
@@ -448,13 +447,13 @@ export class ProductCacheService {
       const itemKeys = await redis.keys('products:item:*')
 
       if (cacheKeys.length > 0) {
-        await redis.del(...cacheKeys)
+        await redis.del(cacheKeys)
       }
       if (indexKeys.length > 0) {
-        await redis.del(...indexKeys)
+        await redis.del(indexKeys)
       }
       if (itemKeys.length > 0) {
-        await redis.del(...itemKeys)
+        await redis.del(itemKeys)
       }
       
       // Eliminar el set de IDs cacheados

@@ -237,6 +237,11 @@ export const POST = async (
       }
     })
 
+    const clientIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.ip ||
+      "unknown"
+
     // Log evento de búsqueda exitosa
     await logSearchEvent(
       AnalyticsEvent.SEARCH_PERFORMED,

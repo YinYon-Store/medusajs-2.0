@@ -16,9 +16,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     
     // Validar parámetros requeridos
     if (!category_main) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "category_main parameter is required"
       });
+      return;
     }
 
     const orderParam = order as string | undefined;

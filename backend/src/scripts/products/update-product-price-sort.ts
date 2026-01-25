@@ -187,12 +187,9 @@ export default async function updateProductPriceSort({ container }: ExecArgs) {
             } catch (updateError: any) {
               // Si falla SQL, intentar con el servicio como fallback
               try {
-                await productModuleService.updateProducts([
-                  {
-                    id: product.id,
-                    order_price: Math.round(maxPrice),
-                  },
-                ]);
+                await productModuleService.updateProducts(product.id, {
+                  order_price: Math.round(maxPrice),
+                } as any);
                 updatedCount++;
                 logger.info(
                   `  ✅ "${product.title}" - Precio máximo: ${maxPrice} ${currencyCode.toUpperCase()} (order_price: ${Math.round(maxPrice)})`
