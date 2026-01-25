@@ -18,6 +18,9 @@ export function generateCacheKey(queryParams: Record<string, any>): string {
     'collection_id',
     'type_id',
     'categories',
+    'category_main',
+    'category_ids',
+    'category_id', // Formato del frontend
     'tags',
     'q',
     'title',

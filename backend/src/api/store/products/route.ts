@@ -13,6 +13,9 @@ import { productCacheService } from "../../../lib/cache/product-cache-service";
  * Para otros casos, delega al endpoint por defecto de Medusa.
  */
 export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void> => {
+  // Log para verificar que el endpoint personalizado se está ejecutando
+  console.log(`[ProductsRoute] GET request received - URL: ${req.url}, Query:`, req.query);
+  
   const orderParam = req.query.order as string | undefined;
   const isOrderByPrice = orderParam === 'order_price' || orderParam === '-order_price';
 
@@ -21,6 +24,45 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
   // Para otros ordenamientos, simplemente no pasamos el order y Medusa usará su lógica por defecto
 
   try {
+    // ========================================================================
+    // FILTROS DE CATEGORÍAS (compatibilidad con filter-by-categories)
+    // Extraer ANTES de generar la cache key para asegurar que se incluyan
+    // ========================================================================
+    // Soportar múltiples formatos: category_main, category_id, categories
+    const categoryMain = req.query.category_main as string | undefined;
+    const categoryId = req.query.category_id;
+    const categoryIds = req.query.category_ids;
+    
+    // Si viene category_id (formato del frontend), convertirlo a category_main o categories
+    let finalCategoryMain = categoryMain;
+    let finalCategoryIdArray: string[] = [];
+    
+    if (categoryId && !categoryMain) {
+      // category_id puede venir como array o string
+      const categoryIdArray = Array.isArray(categoryId) 
+        ? categoryId.map(id => String(id))
+        : [String(categoryId)];
+      if (categoryIdArray.length > 0) {
+        // Si solo hay un category_id, usarlo como category_main
+        // Si hay múltiples, usar el primero como main y el resto como adicionales
+        finalCategoryMain = categoryIdArray[0];
+        finalCategoryIdArray = categoryIdArray.slice(1);
+      }
+    }
+    
+    // Si hay categoryIds del formato filter-by-categories, agregarlos
+    if (categoryIds) {
+      const additionalIds = Array.isArray(categoryIds) 
+        ? categoryIds.map(id => String(id))
+        : [String(categoryIds)];
+      finalCategoryIdArray = [...finalCategoryIdArray, ...additionalIds];
+    }
+    
+    // Log para debugging (remover en producción si es necesario)
+    if (finalCategoryMain || finalCategoryIdArray.length > 0 || categoryId) {
+      console.log(`[ProductsRoute] Category filters - category_main: ${finalCategoryMain}, category_id: ${categoryId}, category_ids:`, finalCategoryIdArray);
+    }
+
     // ========================================================================
     // CACHE: Intentar obtener respuesta desde caché
     // ========================================================================
@@ -31,7 +73,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     
     if (cachedResponse) {
       console.log(`[ProductsRoute] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
-      return res.json(cachedResponse)
+      res.json(cachedResponse)
+      return
     }
     
     console.log(`[ProductsRoute] Cache MISS: ${cacheKey} (${cacheTime}ms)`)
@@ -44,17 +87,26 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     const regionId = req.query.region_id as string | undefined;
     const fields = req.query.fields as string | undefined;
 
-    // Construir filtros de búsqueda (sin limit, offset, order, region_id, fields)
+    // Construir filtros de búsqueda (sin limit, offset, order, region_id, fields, category_main, category_ids)
     // Estos parámetros van en las opciones, no en los filtros
     const filterParams: any = {};
     
     // Copiar solo los parámetros que son filtros válidos
+    // Excluir category_main y category_ids porque se manejan por separado
     const validFilterParams = ['id', 'status', 'collection_id', 'type_id', 'tags', 'categories', 'q', 'title', 'handle'];
     Object.keys(req.query).forEach(key => {
-      if (validFilterParams.includes(key) && key !== 'order') {
+      if (validFilterParams.includes(key) && key !== 'order' && key !== 'category_main' && key !== 'category_ids') {
         filterParams[key] = req.query[key];
       }
     });
+    
+    // Si hay category_main (o category_id convertido), usar filtrado por categorías
+    if (finalCategoryMain) {
+      // Usar la sintaxis de Medusa para filtrar por categoría principal
+      filterParams.categories = {
+        id: [finalCategoryMain]
+      };
+    }
 
     // Si es order_price, NO incluir order en los filtros (para evitar el error de MikroORM)
     // Para otros casos, incluir order en las opciones
@@ -83,28 +135,96 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     let paginatedProducts: any[];
     
     if (isOrderByPrice) {
-      // Usar SQL directo para obtener productos ordenados por order_price con paginación
-      // Esto es mucho más eficiente que obtener todos los productos y ordenarlos en memoria
-      pool = new Pool({ connectionString: DATABASE_URL });
+      // Si hay filtros de categoría, usar el servicio de Medusa (maneja mejor las relaciones)
+      // Solo usar SQL directo cuando NO hay filtros de categoría para mejor rendimiento
+      if (finalCategoryMain) {
+        // Usar el servicio de Medusa cuando hay filtros de categoría
+        const categoryFilterParams: any = {
+          ...filterParams,
+          status: filterParams.status || 'published',
+        };
+        
+        // Obtener todos los productos con la categoría (sin paginación para ordenar correctamente)
+        const allProducts = await productModuleService.listProducts(
+          categoryFilterParams,
+          {
+            relations: ["variants", "variants.options", "images", "categories", "collection", "tags", "options", "options.values"],
+          }
+        );
 
-      // Construir filtros WHERE para la consulta SQL
-      let whereConditions: string[] = ['p.deleted_at IS NULL'];
-      let sqlParams: any[] = [];
-      let paramIndex = 1;
+        // Filtrar por categorías adicionales si existen
+        let filteredProducts = allProducts;
+        if (finalCategoryIdArray.length > 0) {
+          filteredProducts = allProducts.filter((product: any) => {
+            if (!product.categories || product.categories.length === 0) {
+              return false;
+            }
+            const hasAdditionalCategory = product.categories.some((category: any) => 
+              finalCategoryIdArray.includes(category.id)
+            );
+            return hasAdditionalCategory;
+          });
+        }
 
-      // Aplicar filtros básicos si existen
-      if (filterParams.status) {
-        whereConditions.push(`p.status = $${paramIndex++}`);
-        sqlParams.push(filterParams.status);
-      }
-      if (filterParams.collection_id) {
-        whereConditions.push(`p.collection_id = $${paramIndex++}`);
-        sqlParams.push(filterParams.collection_id);
-      }
-      if (filterParams.type_id) {
-        whereConditions.push(`p.type_id = $${paramIndex++}`);
-        sqlParams.push(filterParams.type_id);
-      }
+        // Obtener order_price de la BD para ordenar
+        pool = new Pool({ connectionString: DATABASE_URL });
+        const productIds = filteredProducts.map((p: any) => p.id);
+        
+        if (productIds.length > 0) {
+          const placeholders = productIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+          const orderPriceQuery = await pool.query(
+            `SELECT id, order_price FROM product WHERE id IN (${placeholders})`,
+            productIds
+          );
+          
+          const orderPriceMap = new Map(orderPriceQuery.rows.map((row: any) => [row.id, row.order_price]));
+          
+          // Agregar order_price y ordenar
+          const productsWithPrice = filteredProducts.map((product: any) => ({
+            ...product,
+            order_price: orderPriceMap.get(product.id) ?? null,
+          }));
+
+          const isDesc = orderParam?.startsWith('-');
+          productsWithPrice.sort((a: any, b: any) => {
+            const aPrice = a.order_price ?? 0;
+            const bPrice = b.order_price ?? 0;
+            return isDesc ? bPrice - aPrice : aPrice - bPrice;
+          });
+
+          // Aplicar paginación
+          count = productsWithPrice.length;
+          paginatedProducts = productsWithPrice.slice(offset, offset + limit);
+        } else {
+          paginatedProducts = [];
+          count = 0;
+        }
+        
+        // No cerrar pool aquí, se reutilizará para obtener precios
+      } else {
+        // Usar SQL directo solo cuando NO hay filtros de categoría (más eficiente)
+        pool = new Pool({ connectionString: DATABASE_URL });
+
+        // Construir filtros WHERE para la consulta SQL
+        let whereConditions: string[] = ['p.deleted_at IS NULL'];
+        let sqlParams: any[] = [];
+        let paramIndex = 1;
+
+        // Aplicar filtros básicos si existen
+        if (filterParams.status) {
+          whereConditions.push(`p.status = $${paramIndex++}`);
+          sqlParams.push(filterParams.status);
+        } else {
+          whereConditions.push(`p.status = 'published'`);
+        }
+        if (filterParams.collection_id) {
+          whereConditions.push(`p.collection_id = $${paramIndex++}`);
+          sqlParams.push(filterParams.collection_id);
+        }
+        if (filterParams.type_id) {
+          whereConditions.push(`p.type_id = $${paramIndex++}`);
+          sqlParams.push(filterParams.type_id);
+        }
 
       const isDesc = orderParam?.startsWith('-');
       const orderDirection = isDesc ? 'DESC' : 'ASC';
@@ -123,6 +243,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
       const productsResult = await pool.query(orderByQuery, sqlParams);
 
       // Obtener el count total (sin paginación)
+      // Nota: Si hay category_ids adicionales, el count se ajustará después del filtrado en memoria
       const countQuery = `
         SELECT COUNT(*) as total
         FROM product p
@@ -147,6 +268,37 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
         const productMap = new Map(products.map((p: any) => [p.id, p]));
         products = productIds.map((id: string) => productMap.get(id)).filter(Boolean);
 
+        // Filtrar por categorías adicionales si existen (compatibilidad con filter-by-categories)
+        if (finalCategoryMain && finalCategoryIdArray.length > 0) {
+          products = products.filter((product: any) => {
+            if (!product.categories || product.categories.length === 0) {
+              return false;
+            }
+            // Verificar si el producto tiene alguna de las categorías adicionales
+            const hasAdditionalCategory = product.categories.some((category: any) => 
+              finalCategoryIdArray.includes(category.id)
+            );
+            return hasAdditionalCategory;
+          });
+          // Recalcular count después del filtrado (necesitamos obtener todos los productos primero)
+          // Para obtener el count correcto, necesitamos hacer otra consulta sin paginación
+          const allProductsWithMainCategory = await productModuleService.listProducts(
+            filterParams.categories ? { categories: filterParams.categories } : { id: productIds },
+            {
+              relations: ["categories"],
+            }
+          );
+          const filteredCount = allProductsWithMainCategory.filter((product: any) => {
+            if (!product.categories || product.categories.length === 0) {
+              return false;
+            }
+            return product.categories.some((category: any) => 
+              finalCategoryIdArray.includes(category.id)
+            );
+          }).length;
+          count = filteredCount;
+        }
+
         // Agregar order_price a cada producto
         paginatedProducts = products.map((product: any) => {
           const dbProduct = productsResult.rows.find((row: any) => row.id === product.id);
@@ -159,9 +311,27 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
         paginatedProducts = [];
       }
       // No cerrar pool aquí, se reutilizará para obtener precios
+      }
     } else {
       // Para otros casos, usar paginación normal del servicio
       [products, count] = await productModuleService.listAndCountProducts(filterParams, options);
+      
+      // Filtrar por categorías adicionales si existen (compatibilidad con filter-by-categories)
+      if (finalCategoryMain && finalCategoryIdArray.length > 0) {
+        products = products.filter((product: any) => {
+          if (!product.categories || product.categories.length === 0) {
+            return false;
+          }
+          // Verificar si el producto tiene alguna de las categorías adicionales
+          const hasAdditionalCategory = product.categories.some((category: any) => 
+            finalCategoryIdArray.includes(category.id)
+          );
+          return hasAdditionalCategory;
+        });
+        // Recalcular count después del filtrado
+        count = products.length;
+      }
+      
       paginatedProducts = products;
     }
 
@@ -307,9 +477,20 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     res.json(response);
   } catch (error: any) {
     console.error('[ProductsRoute] Error:', error);
-    res.status(500).json({
+    console.error('[ProductsRoute] Error stack:', error.stack);
+    console.error('[ProductsRoute] Error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      statusCode: error.statusCode,
+    });
+    
+    // Si el error tiene un statusCode, usarlo; de lo contrario, usar 500
+    const statusCode = error.statusCode || error.status || 500;
+    res.status(statusCode).json({
       message: "Error obteniendo productos",
       error: error.message,
+      ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
     });
   }
 };

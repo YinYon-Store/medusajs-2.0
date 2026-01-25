@@ -7,7 +7,7 @@ import {
   IProductModuleService,
   IPricingModuleService,
 } from "@medusajs/framework/types";
-import { DATABASE_URL } from "../lib/constants";
+import { DATABASE_URL } from "../../lib/constants";
 // import { updateProductsWorkflow } from "@medusajs/medusa/core-flows";
 
 /**

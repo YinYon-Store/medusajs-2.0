@@ -23,7 +23,8 @@
     "email:dev": "email dev --dir=./src/modules/email-notifications/templates --port=3002",
     "meilisearch:init": "medusa exec ./src/scripts/init-meilisearch.ts",
     "meilisearch:reindex": "medusa exec ./src/scripts/reindex-meilisearch.ts",
-    "cache:warm": "medusa exec ./src/scripts/warm-product-cache.ts"
+    "products:update-price-sort": "medusa exec ./src/scripts/products/update-product-price-sort.ts",
+    "products:warm-cache": "medusa exec ./src/scripts/products/warm-product-cache.ts"
   },
   "dependencies": {
     "@medusajs/admin-sdk": "2.8.8",
