@@ -47,12 +47,12 @@ async function getRedisClient(): Promise<RedisClientType | null> {
     })
 
     client.on('error', (err) => {
-      console.error('[ProductCache] Redis error:', err)
+      console.error('[Cache] Redis error:', err)
       redisConnected = false
     })
 
     client.on('connect', () => {
-      console.log('[ProductCache] Redis connected')
+      console.log('[Cache] Redis connected')
       redisConnected = true
     })
 
@@ -389,33 +389,28 @@ export class ProductCacheService {
       const indexKey = `products:index:${productId}`
       const itemKey = `products:item:${productId}`
 
-      // 1. Obtener todas las keys de caché que contienen este producto
       const cacheKeys = await redis.sMembers(indexKey)
-
       let invalidatedCount = 0
 
-      // 2. Eliminar cada key de caché
       if (cacheKeys.length > 0) {
         await redis.del(...cacheKeys)
         invalidatedCount = cacheKeys.length
       }
 
-      // 3. Eliminar el producto individual cacheado (si existe)
       const BUILD_FROM_INDIVIDUAL = process.env.PRODUCT_CACHE_BUILD_FROM_INDIVIDUAL === 'true'
-      
       if (BUILD_FROM_INDIVIDUAL) {
         await redis.del(itemKey)
-        // Remover del set de IDs cacheados
         await redis.sRem('products:cached_ids', productId)
       }
 
-      // 5. Eliminar el índice
       await redis.del(indexKey)
 
-      console.log(`[ProductCache] Invalidated ${invalidatedCount} cache keys and individual item for product ${productId}`)
+      if (invalidatedCount > 0) {
+        console.log(`[Cache] Invalidated ${invalidatedCount} keys for ${productId}`)
+      }
       return invalidatedCount
     } catch (error) {
-      console.error('[ProductCache] Error invalidating by product:', error)
+      console.error('[Cache] Invalidation error:', error)
       return 0
     }
   }

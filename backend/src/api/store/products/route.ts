@@ -13,71 +13,44 @@ import { productCacheService } from "../../../lib/cache/product-cache-service";
  * Para otros casos, delega al endpoint por defecto de Medusa.
  */
 export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void> => {
-  // Log para verificar que el endpoint personalizado se está ejecutando
-  console.log(`[ProductsRoute] GET request received - URL: ${req.url}, Query:`, req.query);
-  
   const orderParam = req.query.order as string | undefined;
   const isOrderByPrice = orderParam === 'order_price' || orderParam === '-order_price';
 
-  // Si no es order_price, eliminar el parámetro order y dejar que Medusa maneje el resto
-  // Pero como este endpoint existe, debemos manejar todos los casos
-  // Para otros ordenamientos, simplemente no pasamos el order y Medusa usará su lógica por defecto
-
   try {
-    // ========================================================================
-    // FILTROS DE CATEGORÍAS (compatibilidad con filter-by-categories)
-    // Extraer ANTES de generar la cache key para asegurar que se incluyan
-    // ========================================================================
-    // Soportar múltiples formatos: category_main, category_id, categories
+    // 1. Extraer filtros de categorías
     const categoryMain = req.query.category_main as string | undefined;
     const categoryId = req.query.category_id;
     const categoryIds = req.query.category_ids;
     
-    // Si viene category_id (formato del frontend), convertirlo a category_main o categories
     let finalCategoryMain = categoryMain;
     let finalCategoryIdArray: string[] = [];
     
     if (categoryId && !categoryMain) {
-      // category_id puede venir como array o string
-      const categoryIdArray = Array.isArray(categoryId) 
-        ? categoryId.map(id => String(id))
-        : [String(categoryId)];
+      const categoryIdArray = Array.isArray(categoryId) ? categoryId.map(id => String(id)) : [String(categoryId)];
       if (categoryIdArray.length > 0) {
-        // Si solo hay un category_id, usarlo como category_main
-        // Si hay múltiples, usar el primero como main y el resto como adicionales
         finalCategoryMain = categoryIdArray[0];
         finalCategoryIdArray = categoryIdArray.slice(1);
       }
     }
     
-    // Si hay categoryIds del formato filter-by-categories, agregarlos
     if (categoryIds) {
-      const additionalIds = Array.isArray(categoryIds) 
-        ? categoryIds.map(id => String(id))
-        : [String(categoryIds)];
+      const additionalIds = Array.isArray(categoryIds) ? categoryIds.map(id => String(id)) : [String(categoryIds)];
       finalCategoryIdArray = [...finalCategoryIdArray, ...additionalIds];
     }
     
-    // Log para debugging (remover en producción si es necesario)
-    if (finalCategoryMain || finalCategoryIdArray.length > 0 || categoryId) {
-      console.log(`[ProductsRoute] Category filters - category_main: ${finalCategoryMain}, category_id: ${categoryId}, category_ids:`, finalCategoryIdArray);
-    }
-
-    // ========================================================================
-    // CACHE: Intentar obtener respuesta desde caché
-    // ========================================================================
+    // 2. Intentar caché
     const cacheKey = productCacheService.generateKey(req.query as Record<string, any>)
     const cacheStartTime = Date.now()
     const cachedResponse = await productCacheService.get(cacheKey, req.query as Record<string, any>)
     const cacheTime = Date.now() - cacheStartTime
     
     if (cachedResponse) {
-      console.log(`[ProductsRoute] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
+      console.log(`[Products] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
       res.json(cachedResponse)
       return
     }
     
-    console.log(`[ProductsRoute] Cache MISS: ${cacheKey} (${cacheTime}ms)`)
+    console.log(`[Products] Cache MISS: ${cacheKey}`)
     const productModuleService: IProductModuleService = req.scope.resolve(Modules.PRODUCT);
     const pricingModuleService: IPricingModuleService = req.scope.resolve(Modules.PRICING);
 
@@ -458,34 +431,19 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
       limit: limit,
     };
 
-    // ========================================================================
-    // CACHE: Almacenar respuesta en caché (solo si es exitosa)
-    // Hacerlo de forma asíncrona para no bloquear la respuesta
-    // ========================================================================
-    // No esperar el cacheo - hacerlo en background para no afectar el tiempo de respuesta
     setImmediate(async () => {
       try {
-        // Extraer product IDs de la respuesta para indexación
         const productIds = paginatedProducts.map((p: any) => p.id).filter(Boolean)
         await productCacheService.set(cacheKey, response, productIds)
       } catch (cacheError) {
-        // No bloquear la respuesta si falla el cacheo
-        console.error('[ProductsRoute] Error caching response:', cacheError)
+        console.error('[Products] Cache Error:', cacheError)
       }
     })
 
     res.json(response);
   } catch (error: any) {
-    console.error('[ProductsRoute] Error:', error);
-    console.error('[ProductsRoute] Error stack:', error.stack);
-    console.error('[ProductsRoute] Error details:', {
-      message: error.message,
-      name: error.name,
-      code: error.code,
-      statusCode: error.statusCode,
-    });
+    console.error('[Products] Error:', error.message);
     
-    // Si el error tiene un statusCode, usarlo; de lo contrario, usar 500
     const statusCode = error.statusCode || error.status || 500;
     res.status(statusCode).json({
       message: "Error obteniendo productos",

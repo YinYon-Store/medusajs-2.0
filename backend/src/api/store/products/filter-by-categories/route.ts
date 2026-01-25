@@ -45,12 +45,12 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     const cacheTime = Date.now() - cacheStartTime
     
     if (cachedResponse) {
-      console.log(`[FilterByCategoriesRoute] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
+      console.log(`[Categories] Cache HIT: ${cacheKey} (${cacheTime}ms)`)
       res.json(cachedResponse)
       return
     }
     
-    console.log(`[FilterByCategoriesRoute] Cache MISS: ${cacheKey} (${cacheTime}ms)`)
+    console.log(`[Categories] Cache MISS: ${cacheKey}`)
     const productModuleService: IProductModuleService = req.scope.resolve(Modules.PRODUCT);
     const pricingModuleService: IPricingModuleService = req.scope.resolve(Modules.PRICING);
 
@@ -337,27 +337,17 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
     // ========================================================================
     setImmediate(async () => {
       try {
-        // Extraer product IDs de la respuesta para indexación
         const productIds = paginatedProducts.map((p: any) => p.id).filter(Boolean)
         await productCacheService.set(cacheKey, response, productIds)
       } catch (cacheError) {
-        // No bloquear la respuesta si falla el cacheo
-        console.error('[FilterByCategoriesRoute] Error caching response:', cacheError)
+        console.error('[Categories] Cache Error:', cacheError)
       }
     })
 
     res.json(response);
   } catch (error: any) {
-    console.error('[FilterByCategoriesRoute] Error:', error);
-    console.error('[FilterByCategoriesRoute] Error stack:', error.stack);
-    console.error('[FilterByCategoriesRoute] Error details:', {
-      message: error.message,
-      name: error.name,
-      code: error.code,
-      statusCode: error.statusCode,
-    });
+    console.error('[Categories] Error:', error.message);
     
-    // Si el error tiene un statusCode, usarlo; de lo contrario, usar 500
     const statusCode = error.statusCode || error.status || 500;
     res.status(statusCode).json({
       message: "Error filtrando productos por categorías",

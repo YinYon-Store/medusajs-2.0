@@ -196,14 +196,7 @@ export const POST = async (
       1000 // 1 second base delay
     )
 
-    // Logging (opcional, para auditoría)
-    const clientIp =
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-      req.ip ||
-      "unknown"
-    console.log(
-      `[Search] Query: "${query}", IP: ${clientIp}, Results: ${searchResults.hits.length}`
-    )
+    console.log(`[Search] Query: "${query}", Results: ${searchResults.hits.length}`)
 
     // Obtener ProductModuleService para enriquecer los hits con datos completos
     const productModuleService: IProductModuleService = req.scope.resolve(Modules.PRODUCT)
@@ -280,15 +273,9 @@ export const POST = async (
       error?.code === 'ETIMEDOUT';
 
     if (isNetworkError) {
-      console.error("[Search Error] Network/Connection error:", {
-        message: error?.message,
-        code: error?.code,
-        name: error?.name,
-        host: MEILISEARCH_HOST,
-        query: query,
-      });
+      console.error("[Search] Network Error:", error.message);
     } else {
-      console.error("[Search Error]", error);
+      console.error("[Search] Error:", error.message);
     }
 
     // Reportar error a Crashlytics
