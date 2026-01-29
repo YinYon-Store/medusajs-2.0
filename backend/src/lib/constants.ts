@@ -234,11 +234,19 @@ export const ADDI_TESTING_LOCAL = process.env.ADDI_TESTING_LOCAL === 'true';
 export const STORE_PUBLISHABLE_API_KEY = process.env.STORE_PUBLISHABLE_API_KEY;
 
 /**
- * WhatsApp Configuration
+ * WhatsApp Configuration (Meta / Cloud API - legacy verification GET)
  */
 export const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 export const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 export const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+/**
+ * Twilio Configuration (webhooks de mensajes WhatsApp desde Twilio)
+ * - TWILIO_AUTH_TOKEN: Auth Token de la consola Twilio (para validar X-Twilio-Signature)
+ * - TWILIO_WEBHOOK_BASE_URL: URL pública del webhook (ej. https://api.tudominio.com/hooks/whatsapp)
+ */
+export const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+export const TWILIO_WEBHOOK_BASE_URL = process.env.TWILIO_WEBHOOK_BASE_URL;
 
 /**
  * Notification Service Configuration

@@ -28,9 +28,9 @@ import {
 
 const config: MiddlewaresConfig = {
   routes: [
-    // Webhooks de pago - Rate limiting estricto POR IP
+    // Webhooks (pago + WhatsApp/Twilio) - Rate limiting estricto POR IP
     {
-      matcher: /^\/hooks\/(wompi|addi|bold)\/payment/,
+      matcher: /^\/hooks\/(wompi|addi|bold)\/payment|^\/hooks\/whatsapp/,
       middlewares: [
         rateLimitMiddleware({
           windowMs: RATE_LIMIT_WEBHOOK_WINDOW_MS,

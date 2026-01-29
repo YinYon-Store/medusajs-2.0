@@ -7,6 +7,7 @@ import { LoaderOptions } from "@medusajs/framework/types";
  * Este loader toma el campo `metadata.max_variant_price` y lo expone
  * como `max_variant_price` directamente en el objeto producto.
  */
+/*
 export default async function productLoader(
   { container }: LoaderOptions<{ id: string }>
 ) {
@@ -14,10 +15,6 @@ export default async function productLoader(
   // y transforma la respuesta para incluir campos personalizados
 }
 
-/**
- * Función helper para transformar productos y exponer campos desde metadata
- * Úsala en los endpoints que devuelven productos
- */
 export function transformProductWithPriceSort(product: any): any {
   if (!product) return product;
 
@@ -33,9 +30,7 @@ export function transformProductWithPriceSort(product: any): any {
   };
 }
 
-/**
- * Función helper para transformar arrays de productos
- */
 export function transformProductsWithPriceSort(products: any[]): any[] {
   return products.map(transformProductWithPriceSort);
 }
+*/
