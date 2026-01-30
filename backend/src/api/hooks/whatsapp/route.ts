@@ -9,7 +9,7 @@ import {
 } from "../../../lib/constants";
 
 // ---------------------------------------------------------------------------
-// GET: Verificación de webhook de Meta (legacy). Twilio no usa GET.
+// GET: Verificación de webhook de Meta (hub.mode/hub.verify_token) o health check.
 // ---------------------------------------------------------------------------
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const mode = req.query["hub.mode"];
@@ -23,9 +23,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         } else {
             res.sendStatus(403);
         }
-    } else {
-        res.sendStatus(400);
+        return;
     }
+
+    // GET sin params (Twilio, health check, etc.): responder 200 para no generar 400 en logs
+    res.status(200).send("OK");
 };
 
 // ---------------------------------------------------------------------------
@@ -78,15 +80,15 @@ async function handleTwilioWebhook(
 
     try {
         const from = params.From || "";   // ej. "whatsapp:+573001234567"
-        const body = params.Body || "";
+        const bodyText = params.Body || "";
         const messageSid = params.MessageSid || "";
 
         console.log(`WhatsApp (Twilio) message received from ${from}, sid: ${messageSid}`);
 
-        // Aquí puedes enviar auto-respuesta vía Twilio si lo necesitas
-        // await sendTwilioAutoReply(from);
+        const autoReplyBody = "Este medio es solo para notificaciones; para preguntas, pedidos e inquietudes, contactar a +57 312 6742478.";
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(autoReplyBody)}</Message></Response>`;
 
-        res.status(200).contentType("text/xml").send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>");
+        res.status(200).contentType("text/xml").send(twiml);
     } catch (error) {
         console.error("Error processing Twilio WhatsApp webhook:", error);
         res.sendStatus(500);
@@ -124,6 +126,15 @@ async function handleMetaWebhook(req: MedusaRequest, res: MedusaResponse) {
         console.error("Error processing Meta WhatsApp webhook:", error);
         res.sendStatus(500);
     }
+}
+
+function escapeXml(text: string): string {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
 }
 
 function parseFormUrlEncoded(raw: string): Record<string, string> {
