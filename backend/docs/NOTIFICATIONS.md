@@ -156,19 +156,18 @@ await notifyPaymentCaptured(
 
 ## Implementación en Backend
 
-### Función `notifyPaymentCaptured()`
+### Funciones disponibles
 
 **Ubicación:** `src/lib/notification-service.ts`
 
-**Parámetros:**
-- `order`: Objeto de orden
-- `status`: Estado del pago (APPROVED, SALE_APPROVED, etc.)
-- `amount`: Monto del pago
-- `reference`: ID de transacción
-- `provider`: Proveedor ('bold', 'addi', 'wompi')
-- `time`: Timestamp del evento (opcional)
+Todas las funciones envían `order_id` (Display ID) y `tenant_id` (ID interno de orden) según la especificación de la API.
 
-**Uso:**
+- **`notifyOrderCreated(order)`** - Orden creada
+- **`notifyPaymentCaptured(order, status, amount, reference, provider, time?)`** - Pago capturado/rechazado
+- **`notifyOrderShipped(order, courierName, trackingNumber, trackingUrl?)`** - Orden enviada (retorna `Response`)
+- **`notifyOrderDelivered(order)`** - Orden entregada (retorna `Response`)
+
+**Ejemplo `notifyPaymentCaptured`:**
 ```typescript
 await notifyPaymentCaptured(
   order,
@@ -184,6 +183,13 @@ await notifyPaymentCaptured(
 
 ## API del Servicio de Notificaciones
 
+Ver documentación completa en [NOTIFICACIONS_API_DOCS.md](./NOTIFICACIONS_API_DOCS.md).
+
+### Definiciones de Campos
+
+- **`order_id`**: Display ID de la orden (ej: `1234`, `#65`). Identificador corto visible al cliente.
+- **`tenant_id`**: ID interno de la orden en base de datos (ej: `order_01KG64DVTPY79YFS8Q8557KEN7`). Usado para URLs y lógica del sistema.
+
 ### Base URL
 
 El servicio corre en el puerto `8080` por defecto.
@@ -198,134 +204,13 @@ Todos los endpoints están protegidos por una API Key. Debes incluir el header `
 
 ### Endpoints
 
-#### 1. Health Check (Public)
-
-Usado para verificar si el servicio está corriendo.
-
-**Endpoint:** `GET /health`
-
-**Payload:** None
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "service": "notification-service"
-}
-```
-
----
-
-#### 2. Order Created
-
-Disparado cuando se crea una nueva orden.
-
-**Endpoint:** `POST /events/order-created`
-
-**Payload:**
-```json
-{
-  "order_id": "12345",
-  "tenant_id": "tenant_1",
-  "customer_name": "John Doe",
-  "customer_phone": "573001234567",
-  "backoffice_url": "https://admin.example.com/orders/12345"
-}
-```
-
-**Notificaciones Enviadas:**
-- **Customer:** `order_created_customer_new`
-  - Params: `order_id`
-  - Button: Link to order tracking (using `order_id`)
-- **Admin:** `order_created_admin`
-  - Params: `order_id`, `order_url`
-
----
-
-#### 3. Payment Captured
-
-Disparado cuando un pago es capturado exitosamente o rechazado.
-
-**Endpoint:** `POST /events/payment-captured`
-
-**Payload:**
-```json
-{
-  "order_id": "12345",
-  "tenant_id": "tenant_1",
-  "status": "APPROVED",
-  "customer_phone": "573001234567",
-  "amount": 770000,
-  "reference": "ref_123",
-  "provider": "bold",
-  "time": "2025-04-12T19:00:00Z",
-  "backoffice_url": "https://admin.example.com/orders/12345"
-}
-```
-
-**Valores posibles de `status`:**
-
-| Tipo de Estado | Valores |
-|---|---|
-| **Approved** | `APPROVED`, `SALE_APPROVED`, `VOID_APPROVED`, `CAPTURED` |
-| **Rejected** | `SALE_REJECTED`, `VOID_REJECTED`, `REJECTED`, `DECLINED`, `ABANDONED`, `INTERNAL_ERROR` |
-
-**Notificaciones Enviadas:**
-- **Customer (Approved):** `payment_approved_customer_new`
-  - Params: `order_id`
-  - Button: Link to order (using `order_id`)
-- **Customer (Rejected):** `payment_rejected_customer_new`
-  - Params: `order_id`
-- **Admin:** `payment_update_admin`
-  - Params: `order_id`, `payment_status`, `payment_ref`, `provider_name`, `total_amount`, `transaction_time`
-  - Button: Link to order (using `order_id`)
-
----
-
-#### 4. Order Shipped
-
-Disparado cuando una orden es enviada.
-
-**Endpoint:** `POST /events/order-shipped`
-
-**Payload:**
-```json
-{
-  "order_id": "12345",
-  "tenant_id": "tenant_1",
-  "customer_phone": "573001234567",
-  "courier_name": "Coordinadora",
-  "tracking_number": "987654321",
-  "tracking_url": "https://coordinadora.com/rastreo/..."
-}
-```
-
-**Notificaciones Enviadas:**
-- **Customer:** `order_shipped_customer_new`
-  - Params: `order_id`, `courier_name`, `tracking_number`, `tracking_url`
-- **Admin:** `order_shipped_admin`
-  - Params: `order_id`, `courier_name`, `tracking_number`, `tracking_url`
-
----
-
-#### 5. Order Delivered
-
-Disparado cuando una orden es entregada.
-
-**Endpoint:** `POST /events/order-delivered`
-
-**Payload:**
-```json
-{
-  "order_id": "12345",
-  "tenant_id": "tenant_1",
-  "customer_phone": "573001234567"
-}
-```
-
-**Notificaciones Enviadas:**
-- **Customer:** `order_delivered_customer_new`
-  - Params: `order_id`
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /health` | Health check (público) |
+| `POST /events/order-created` | Orden creada |
+| `POST /events/payment-captured` | Pago capturado o rechazado |
+| `POST /events/order-shipped` | Orden enviada |
+| `POST /events/order-delivered` | Orden entregada |
 
 ---
 
@@ -339,13 +224,13 @@ El servicio usa los siguientes templates de WhatsApp. Asegúrate de que estos es
 | `pending_order_ready_to_ship` | `es_CO` | UTILITY | `order_list` |
 | `pending_order_payments` | `es_CO` | UTILITY | `order_list` |
 | `order_shipped_admin` | `es_CO` | UTILITY | `order_id`, `courier_name`, `tracking_number`, `tracking_url` |
-| `payment_update_admin` | `es_CO` | UTILITY | `order_id`, `payment_status`, `payment_ref`, `provider_name`, `total_amount`, `transaction_time` |
-| `order_created_admin` | `es_CO` | UTILITY | `order_id`, `order_url` |
-| `order_delivered_customer_new` | `es_CO` | UTILITY | `order_id` |
-| `order_shipped_customer_new` | `es_CO` | UTILITY | `order_id`, `courier_name`, `tracking_number`, `tracking_url` |
-| `payment_rejected_customer_new` | `es_CO` | UTILITY | `order_id` |
-| `payment_approved_customer_new` | `es_CO` | UTILITY | `order_id` |
-| `order_created_customer_new` | `es_CO` | UTILITY | `order_id` |
+| `payment_update_admin` | `es_CO` | UTILITY | `order_id`, `payment_status`, `payment_ref`, `provider_name`, `total_amount`, `transaction_time`, `tenant_id` |
+| `order_created_admin` | `es_CO` | UTILITY | `order_id`, `tenant_id` |
+| `order_delivered_customer` | `es_CO` | UTILITY | `order_id` |
+| `order_shipped_customer` | `es_CO` | UTILITY | `order_id`, `courier_name`, `tracking_number`, `tracking_url` |
+| `payment_rejected_customer` | `es_CO` | UTILITY | `order_id` |
+| `payment_approved_customer` | `es_CO` | UTILITY | `order_id`, `tenant_id` |
+| `order_created_customer_new` | `es_CO` | UTILITY | `order_id`, `tenant_id` |
 
 ### Formato de Parámetros
 

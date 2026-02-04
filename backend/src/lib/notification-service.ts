@@ -4,6 +4,19 @@ const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http:/
 const NOTIFICATION_API_KEY = process.env.NOTIFICATION_API_KEY
 
 /**
+ * Log to stdout (bypasses framework console overrides - ensures visibility in Medusa)
+ */
+function logNotification(msg: string, data?: object): void {
+  const line = data ? `${msg} ${JSON.stringify(data)}` : msg
+  process.stdout.write(`[Notification] ${line}\n`)
+}
+
+function logNotificationError(msg: string, err?: unknown): void {
+  const line = err !== undefined ? `${msg} ${String(err)}` : msg
+  process.stderr.write(`[Notification] ${line}\n`)
+}
+
+/**
  * Helper function to format phone number for WhatsApp
  * Ensures phone number is in format: 573001234567 (Colombia format with country code)
  */
@@ -75,13 +88,16 @@ async function callNotificationService(
   endpoint: string,
   payload: any
 ): Promise<Response | null> {
+  // Log notification call and payload
+  logNotification(`Calling ${endpoint}`, payload)
+
   if (NOTIFICATION_DRY_RUN) {
-    console.log(`[Notification] DRY RUN: ${endpoint}`)
+    logNotification(`DRY RUN: ${endpoint}`)
     return createMockResponse(200)
   }
 
   if (!NOTIFICATION_API_KEY) {
-    console.warn('[Notification] API key not configured')
+    logNotification('API key not configured')
     return null
   }
 
@@ -97,15 +113,27 @@ async function callNotificationService(
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`[Notification] Error ${response.status}: ${endpoint}`, errorText)
+      logNotificationError(`Error ${response.status}: ${endpoint}`, errorText)
       return response
     }
 
+    logNotification(`Success: ${endpoint} (HTTP ${response.status})`)
     return response
   } catch (error) {
-    console.error(`[Notification] Network error: ${endpoint}`, error)
+    logNotificationError(`Network error: ${endpoint}`, error)
     return null
   }
+}
+
+/**
+ * Get order_id (Display ID) and tenant_id (Database Order ID) per API spec.
+ * - order_id: Short identifier visible to customer (e.g., "1234", "#65")
+ * - tenant_id: Internal database ID for URLs and system logic
+ */
+function getOrderIds(order: any): { order_id: string; tenant_id: string } {
+  const order_id = order.display_id
+  const tenant_id = order.id
+  return { order_id, tenant_id }
 }
 
 /**
@@ -115,15 +143,18 @@ export async function notifyOrderCreated(order: any): Promise<void> {
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
   
   if (!customerPhone) {
+    logNotification('Skipped order-created: no customer_phone', { order_id: order.display_id ?? order.id })
     return
   }
 
-  const backofficeUrl = `${BACKEND_URL}/app/orders/${order.id}`
+  const { order_id, tenant_id } = getOrderIds(order)
+  const backofficeUrl = `${BACKEND_URL}/app/orders/${tenant_id}`
   const customerName = getCustomerName(order)
 
+  logNotification('Order created', { order_id, tenant_id, customerName, customerPhone, backofficeUrl })
   await callNotificationService('/events/order-created', {
-    order_id: order.id,
-    tenant_id: 'aura_perfumeria',
+    order_id,
+    tenant_id,
     customer_name: customerName,
     customer_phone: customerPhone,
     backoffice_url: backofficeUrl,
@@ -144,6 +175,7 @@ export async function notifyPaymentCaptured(
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
   
   if (!customerPhone) {
+    logNotification('Skipped payment-captured: no customer_phone', { order_id: order.display_id ?? order.id, status })
     return
   }
 
@@ -157,12 +189,15 @@ export async function notifyPaymentCaptured(
 
   // Only send notification for approved or rejected statuses
   if (!isApproved && !isRejected) {
+    logNotification('Skipped payment-captured: status not approved/rejected', { order_id: order.display_id ?? order.id, status })
     return
   }
 
+  const { order_id, tenant_id } = getOrderIds(order)
+  logNotification('Payment captured', { order_id, tenant_id, status, customerPhone, amount, reference, provider, time, backofficeUrl })
   await callNotificationService('/events/payment-captured', {
-    order_id: order.id,
-    tenant_id: 'aura_perfumeria',
+    order_id,
+    tenant_id,
     status: status,
     customer_phone: customerPhone,
     amount: amount,
@@ -186,16 +221,39 @@ export async function notifyOrderShipped(
   const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
   
   if (!customerPhone) {
+    logNotification('Skipped order-shipped: no customer_phone', { order_id: order.display_id ?? order.id })
     return null
   }
 
+  const { order_id, tenant_id } = getOrderIds(order)
+  logNotification('Order shipped', { order_id, tenant_id, customerPhone, courierName, trackingNumber, trackingUrl })
   return await callNotificationService('/events/order-shipped', {
-    order_id: order.id,
-    tenant_id: 'aura_perfumeria',
+    order_id,
+    tenant_id,
     customer_phone: customerPhone,
     courier_name: courierName,
     tracking_number: trackingNumber,
     tracking_url: trackingUrl || '',
+  })
+}
+
+/**
+ * Send order delivered notification
+ */
+export async function notifyOrderDelivered(order: any): Promise<Response | null> {
+  const customerPhone = formatPhoneNumber(order.shipping_address?.phone)
+  
+  if (!customerPhone) {
+    logNotification('Skipped order-delivered: no customer_phone', { order_id: order.display_id ?? order.id })
+    return null
+  }
+
+  const { order_id, tenant_id } = getOrderIds(order)
+  logNotification('Order delivered', { order_id, tenant_id, customerPhone })
+  return await callNotificationService('/events/order-delivered', {
+    order_id,
+    tenant_id,
+    customer_phone: customerPhone,
   })
 }
 
