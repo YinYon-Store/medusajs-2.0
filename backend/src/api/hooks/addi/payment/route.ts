@@ -42,16 +42,17 @@ function validateBasicAuth(authHeader: string | undefined): boolean {
         return false;
     }
 
-    // RFC 2617: scheme is case-insensitive (Basic, basic, BASIC)
+    // RFC 2617: scheme is case-insensitive. ADDI may send "Basic " or "Basic" + base64 (no space)
     const normalizedAuth = authHeader.trim();
-    if (!normalizedAuth.toLowerCase().startsWith("basic ")) {
+    const basicMatch = normalizedAuth.match(/^basic\s*(.*)$/i);
+    if (!basicMatch) {
         const scheme = normalizedAuth.split(/\s+/)[0] || "(empty)";
         console.error("[Addi] Invalid authorization header - expected Basic, received:", scheme);
         return false;
     }
 
     try {
-        const base64Credentials = normalizedAuth.slice(6).trim(); // Remover "Basic "
+        const base64Credentials = basicMatch[1].trim(); // Credentials after "Basic" (with or without space)
         if (!base64Credentials) {
             console.error("[Addi] Authorization header has empty credentials");
             return false;
