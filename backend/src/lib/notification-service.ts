@@ -131,8 +131,8 @@ async function callNotificationService(
  * - tenant_id: Internal database ID for URLs and system logic
  */
 function getOrderIds(order: any): { order_id: string; tenant_id: string } {
-  const order_id = order.display_id
-  const tenant_id = order.id
+  const order_id = String(order.display_id ?? order.id)
+  const tenant_id = String(order.id)
   return { order_id, tenant_id }
 }
 
