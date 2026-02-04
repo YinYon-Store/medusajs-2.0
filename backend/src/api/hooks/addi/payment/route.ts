@@ -42,13 +42,20 @@ function validateBasicAuth(authHeader: string | undefined): boolean {
         return false;
     }
 
-    if (!authHeader.startsWith("Basic ")) {
-        console.error("[Addi] Invalid authorization header");
+    // RFC 2617: scheme is case-insensitive (Basic, basic, BASIC)
+    const normalizedAuth = authHeader.trim();
+    if (!normalizedAuth.toLowerCase().startsWith("basic ")) {
+        const scheme = normalizedAuth.split(/\s+/)[0] || "(empty)";
+        console.error("[Addi] Invalid authorization header - expected Basic, received:", scheme);
         return false;
     }
 
     try {
-        const base64Credentials = authHeader.slice(6); // Remover "Basic "
+        const base64Credentials = normalizedAuth.slice(6).trim(); // Remover "Basic "
+        if (!base64Credentials) {
+            console.error("[Addi] Authorization header has empty credentials");
+            return false;
+        }
         const credentials = Buffer.from(base64Credentials, "base64").toString("utf-8");
         const [username, password] = credentials.split(":");
 
