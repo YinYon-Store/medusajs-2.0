@@ -5,12 +5,38 @@ import { DATABASE_URL } from "../../../lib/constants";
 import { productCacheService } from "../../../lib/cache/product-cache-service";
 
 /**
+ * Extrae la lista ordenada de IDs de producto de la query cuando el cliente
+ * envía id[0], id[1], ... (p. ej. desde la página de resultados de búsqueda).
+ * Preservar este orden permite que "Ver todos" muestre los productos en el
+ * mismo orden de relevancia que devolvió POST /store/search.
+ */
+function getOrderedProductIdsFromQuery(query: Record<string, any>): string[] | null {
+  const idParam = query.id
+  if (Array.isArray(idParam) && idParam.length > 0) {
+    return idParam.map((x: any) => String(x)).filter(Boolean)
+  }
+  if (typeof idParam === "string" && idParam) {
+    return [idParam]
+  }
+  const bracketKeys = Object.keys(query).filter((k) => /^id\[\d+\]$/.test(k))
+  if (bracketKeys.length === 0) return null
+  bracketKeys.sort((a, b) => {
+    const i = parseInt(a.replace(/^id\[(\d+)\]$/, "$1"), 10)
+    const j = parseInt(b.replace(/^id\[(\d+)\]$/, "$1"), 10)
+    return i - j
+  })
+  return bracketKeys.map((k) => String(query[k])).filter(Boolean)
+}
+
+/**
  * Endpoint personalizado para /store/products que maneja order=order_price
  * 
  * Si el parámetro order es order_price o -order_price, este endpoint
  * maneja el ordenamiento manualmente usando SQL directo.
  * 
- * Para otros casos, delega al endpoint por defecto de Medusa.
+ * Cuando la request incluye una lista explícita de IDs (id[0], id[1], ...),
+ * se preserva el orden de esos IDs en la respuesta (p. ej. orden de relevancia
+ * de búsqueda) en lugar de reordenar por created_at u otro criterio.
  */
 export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void> => {
   const orderParam = req.query.order as string | undefined;
@@ -72,6 +98,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
         filterParams[key] = req.query[key];
       }
     });
+    // Si la query trae id[0], id[1], ... (p. ej. desde "Ver todos" de búsqueda), construir filterParams.id
+    const orderedIdsFromQuery = getOrderedProductIdsFromQuery(req.query as Record<string, any>);
+    if (orderedIdsFromQuery && orderedIdsFromQuery.length > 0 && !filterParams.id) {
+      filterParams.id = orderedIdsFromQuery;
+    }
     
     // Si hay category_main (o category_id convertido), usar filtrado por categorías
     if (finalCategoryMain) {
@@ -306,6 +337,17 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse): Promise<void
       }
       
       paginatedProducts = products;
+    }
+
+    // Si la request trae una lista explícita de IDs (p. ej. desde "Ver todos" de búsqueda),
+    // preservar ese orden en la respuesta en lugar del orden por created_at/default
+    const orderedIds = getOrderedProductIdsFromQuery(req.query as Record<string, any>)
+    if (orderedIds && orderedIds.length > 0 && paginatedProducts.length > 0) {
+      const byId = new Map(paginatedProducts.map((p: any) => [p.id, p]))
+      const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as any[]
+      if (ordered.length > 0) {
+        paginatedProducts = ordered
+      }
     }
 
     // Obtener precios para todas las variantes (optimizado - una sola consulta)

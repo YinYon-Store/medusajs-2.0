@@ -25,6 +25,7 @@ export function generateCacheKey(queryParams: Record<string, any>): string {
     'q',
     'title',
     'handle',
+    'id', // Lista de IDs (p. ej. id[0], id[1] desde resultados de búsqueda); orden afecta la respuesta
   ]
   
   // Solo incluir parámetros relevantes
@@ -32,6 +33,17 @@ export function generateCacheKey(queryParams: Record<string, any>): string {
     if (queryParams[key] !== undefined && queryParams[key] !== null && queryParams[key] !== '') {
       relevantParams[key] = queryParams[key]
     }
+  }
+
+  // Incluir lista ordenada de IDs cuando viene como id[0], id[1], ... (p. ej. resultados de búsqueda)
+  const idBracketKeys = Object.keys(queryParams).filter((k) => /^id\[\d+\]$/.test(k))
+  if (idBracketKeys.length > 0) {
+    idBracketKeys.sort((a, b) => {
+      const i = parseInt(a.replace(/^id\[(\d+)\]$/, '$1'), 10)
+      const j = parseInt(b.replace(/^id\[(\d+)\]$/, '$1'), 10)
+      return i - j
+    })
+    relevantParams.id = idBracketKeys.map((k) => queryParams[k])
   }
   
   // Ordenar keys para consistencia

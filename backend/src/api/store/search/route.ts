@@ -173,6 +173,9 @@ export const POST = async (
     query = body.query;
     const { limit = 20, offset = 0 } = body
 
+    // Log temporal para diagnosticar búsqueda: confirmar que el backend recibe el query correcto
+    console.log("[Search] Request received – query:", JSON.stringify(query), "limit:", limit, "offset:", offset, "bodyKeys:", body ? Object.keys(body) : [])
+
     // Validar query
     const validation = validateSearchQuery(query)
     if (!validation.valid) {
